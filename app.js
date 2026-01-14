@@ -121,6 +121,43 @@ function sortPivotRowsByRowKeys(pivot, { preferredOrderByKey = {} } = {}) {
   });
 }
 
+function sortRowIdsByRowKeys(rowIds, pivot, { preferredOrderByKey = {} } = {}) {
+  if (!Array.isArray(rowIds) || !pivot || !pivot.rowMeta || !Array.isArray(pivot.rowKeys)) return rowIds;
+  if (rowIds.length <= 1) return rowIds;
+
+  const orderMaps = new Map();
+  for (const [key, order] of Object.entries(preferredOrderByKey)) {
+    if (!key || !Array.isArray(order)) continue;
+    orderMaps.set(
+      key,
+      new Map(order.map((v, i) => [String(v ?? '').toLowerCase(), i]))
+    );
+  }
+
+  const compareValues = (key, aVal, bVal) => {
+    const map = orderMaps.get(key);
+    if (map) {
+      const ak = String(aVal ?? '').toLowerCase();
+      const bk = String(bVal ?? '').toLowerCase();
+      const ar = map.has(ak) ? map.get(ak) : Number.POSITIVE_INFINITY;
+      const br = map.has(bk) ? map.get(bk) : Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br;
+    }
+    return String(aVal ?? '').localeCompare(String(bVal ?? ''));
+  };
+
+  return rowIds.slice().sort((aRowId, bRowId) => {
+    const aMeta = pivot.rowMeta.get(aRowId) ?? {};
+    const bMeta = pivot.rowMeta.get(bRowId) ?? {};
+
+    for (const key of pivot.rowKeys) {
+      const cmp = compareValues(key, aMeta[key], bMeta[key]);
+      if (cmp) return cmp;
+    }
+    return String(aRowId ?? '').localeCompare(String(bRowId ?? ''));
+  });
+}
+
 const PARTICIPANT_ID_SEP = '\u0001';
 
 function makeParticipantIdKey(participant, identifier) {
@@ -321,7 +358,15 @@ function exportCurrentPivotToExcel() {
 
   const aoa = [titleRow, generatedRow, spacerRow, headerTop, headerSub];
 
-  for (const rowId of pivot.rows) {
+  const exportRowIds = state.dimCols.row_type
+    ? sortRowIdsByRowKeys(pivot.rows, pivot, {
+      preferredOrderByKey: {
+        [state.dimCols.row_type]: SECTION_ORDER,
+      },
+    })
+    : pivot.rows;
+
+  for (const rowId of exportRowIds) {
     const meta = pivot.rowMeta?.get(rowId) ?? {};
     const row = [];
     for (const c of leftCols) {
