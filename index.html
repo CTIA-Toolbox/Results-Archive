@@ -7,7 +7,7 @@
   <title>Results Archive</title>
 
   <link rel="manifest" href="./manifest.json?v=1" />
-  <link rel="stylesheet" href="./styles.css?v=28" />
+  <link rel="stylesheet" href="./styles.css?v=30" />
 
   <!-- Pyodide runtime (client-side Python + pandas). Loaded from CDN. -->
   <!-- You can pin/upgrade the version here later if needed. -->
@@ -27,6 +27,12 @@
         <span class="label">Dataset (.pkl)</span>
         <input id="fileInput" type="file" accept=".pkl,.pickle,application/octet-stream" />
         <div id="lastDatasetInfo" class="muted small"></div>
+      </label>
+
+      <label class="file">
+        <span class="label">Call data (.pkl)</span>
+        <input id="callFileInput" type="file" accept=".pkl,.pickle,application/octet-stream" />
+        <div id="lastCallDatasetInfo" class="muted small"></div>
       </label>
 
       <div class="building-picker">
@@ -83,6 +89,18 @@
       </div>
     </section>
 
+    <section id="callCard" class="grid-card">
+      <div class="grid-toolbar">
+        <div class="muted" id="callSummary">No call data loaded.</div>
+        <div class="grid-tools">
+          <button id="exportCallsExcel" class="btn btn-small" disabled>Export Call Data</button>
+        </div>
+      </div>
+      <div id="callTableContainer" class="grid-container">
+        <div class="placeholder">Load call data to enable export.</div>
+      </div>
+    </section>
+
     <section id="debugSection" class="status">
       <details class="status-details">
         <summary>Detected columns</summary>
@@ -98,7 +116,7 @@
 
   <footer class="app-footer muted">
     <span>Tip: run via a local web server (not file://) so the service worker can register.</span>
-    <span style="margin-left: 10px;">Build: <strong id="buildStamp">dev-43</strong></span>
+    <span style="margin-left: 10px;">Build: <strong id="buildStamp">dev-45</strong></span>
   </footer>
 
   <!-- Load the app module with a visible error fallback (so failures aren't silent). -->
@@ -112,7 +130,7 @@
     };
 
     log('Bootstrapping app module…');
-    import('./app.js?v=45').then(() => {
+    import('./app.js?v=47').then(() => {
       log('App module loaded.');
     }).catch((err) => {
       console.error(err);

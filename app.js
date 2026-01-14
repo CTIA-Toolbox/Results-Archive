@@ -3,6 +3,7 @@ import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 
 const els = {
   fileInput: document.getElementById('fileInput'),
+  callFileInput: document.getElementById('callFileInput'),
   statusText: document.getElementById('statusText'),
   columnsPreview: document.getElementById('columnsPreview'),
   gridContainer: document.getElementById('gridContainer'),
@@ -10,8 +11,13 @@ const els = {
   zoomSelect: document.getElementById('zoomSelect'),
   exportExcel: document.getElementById('exportExcel'),
   lastDatasetInfo: document.getElementById('lastDatasetInfo'),
+  lastCallDatasetInfo: document.getElementById('lastCallDatasetInfo'),
   filtersDetails: document.getElementById('filtersDetails'),
   gridCard: document.getElementById('gridCard'),
+  callCard: document.getElementById('callCard'),
+  callSummary: document.getElementById('callSummary'),
+  callTableContainer: document.getElementById('callTableContainer'),
+  exportCallsExcel: document.getElementById('exportCallsExcel'),
   debugSection: document.getElementById('debugSection'),
   debugLog: document.getElementById('debugLog'),
   filtersContainer: document.getElementById('filtersContainer'),
@@ -55,8 +61,11 @@ const state = {
     participant: new Set(),
     stage: new Set(),
     building: new Set(),
+    path_id: new Set(),
+    point_id: new Set(),
     os: new Set(),
     row_type: new Set(),
+    location_source: new Set(),
   },
 
   // Per-section ID filters (Section value -> Set(ID values)).
@@ -68,10 +77,26 @@ const state = {
   knownBuildingsLowerMap: new Map(),
 };
 
+const callState = {
+  columns: [],
+  records: [],
+  filteredRecords: [],
+  lastFileInfo: null,
+  dimCols: {
+    participant: null,
+    stage: null,
+    building: null,
+    path_id: null,
+    point_id: null,
+    location_source: null,
+  },
+};
+
 const IDB_DB_NAME = 'resultsArchive';
 const IDB_DB_VERSION = 1;
 const IDB_STORE_FILES = 'files';
-const IDB_KEY_LAST_PKL = 'lastPkl';
+const IDB_KEY_ARCHIVE_PKL = 'archivePkl';
+const IDB_KEY_CALL_PKL = 'callPkl';
 
 const PYODIDE_CDN_URL = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
 
@@ -155,13 +180,13 @@ function openIdb() {
   });
 }
 
-async function idbGetLastPkl() {
+async function idbGetPkl(key) {
   const db = await openIdb();
   try {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(IDB_STORE_FILES, 'readonly');
       const store = tx.objectStore(IDB_STORE_FILES);
-      const req = store.get(IDB_KEY_LAST_PKL);
+      const req = store.get(key);
       req.onsuccess = () => resolve(req.result ?? null);
       req.onerror = () => reject(req.error ?? new Error('IndexedDB read failed'));
     });
@@ -170,7 +195,7 @@ async function idbGetLastPkl() {
   }
 }
 
-async function idbSetLastPkl({ file, bytes }) {
+async function idbSetPkl(key, { file, bytes }) {
   const db = await openIdb();
   try {
     const meta = {
@@ -186,7 +211,7 @@ async function idbSetLastPkl({ file, bytes }) {
     await new Promise((resolve, reject) => {
       const tx = db.transaction(IDB_STORE_FILES, 'readwrite');
       const store = tx.objectStore(IDB_STORE_FILES);
-      store.put({ key: IDB_KEY_LAST_PKL, meta, blob });
+      store.put({ key, meta, blob });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('IndexedDB write failed'));
       tx.onabort = () => reject(tx.error ?? new Error('IndexedDB write aborted'));
@@ -199,23 +224,40 @@ async function idbSetLastPkl({ file, bytes }) {
 }
 
 async function refreshLastDatasetInfo() {
-  if (!els.lastDatasetInfo) return;
-  try {
-    const rec = await idbGetLastPkl();
-    const meta = rec?.meta;
-    if (!meta?.name) {
+  if (els.lastDatasetInfo) {
+    try {
+      const rec = await idbGetPkl(IDB_KEY_ARCHIVE_PKL);
+      const meta = rec?.meta;
+      if (!meta?.name) {
+        els.lastDatasetInfo.textContent = '';
+      } else {
+        const parts = [];
+        parts.push(`Saved archive: ${meta.name}`);
+        if (meta.size) parts.push(formatBytes(meta.size));
+        if (meta.lastModified) parts.push(new Date(meta.lastModified).toLocaleString());
+        els.lastDatasetInfo.textContent = parts.join(' • ');
+      }
+    } catch {
       els.lastDatasetInfo.textContent = '';
-      return;
     }
+  }
 
-    const parts = [];
-    parts.push(`Saved dataset: ${meta.name}`);
-    if (meta.size) parts.push(formatBytes(meta.size));
-    if (meta.lastModified) parts.push(new Date(meta.lastModified).toLocaleString());
-    els.lastDatasetInfo.textContent = parts.join(' • ');
-  } catch {
-    // If IDB isn't available, just hide the line.
-    els.lastDatasetInfo.textContent = '';
+  if (els.lastCallDatasetInfo) {
+    try {
+      const rec = await idbGetPkl(IDB_KEY_CALL_PKL);
+      const meta = rec?.meta;
+      if (!meta?.name) {
+        els.lastCallDatasetInfo.textContent = '';
+      } else {
+        const parts = [];
+        parts.push(`Saved call data: ${meta.name}`);
+        if (meta.size) parts.push(formatBytes(meta.size));
+        if (meta.lastModified) parts.push(new Date(meta.lastModified).toLocaleString());
+        els.lastCallDatasetInfo.textContent = parts.join(' • ');
+      }
+    } catch {
+      els.lastCallDatasetInfo.textContent = '';
+    }
   }
 }
 
@@ -700,6 +742,17 @@ function guessDimensionColumns(columns) {
   };
 }
 
+function guessCallDimensionColumns(columns) {
+  return {
+    participant: detectColumn(columns, ['participant', 'carrier', 'name', 'user', 'person']),
+    stage: detectColumn(columns, ['stage', 'stg', 'phase']),
+    building: detectColumn(columns, ['building_id', 'building', 'bldg', 'site', 'location']),
+    path_id: detectColumn(columns, ['path_id', 'path id', 'path', 'pathid']),
+    point_id: detectColumn(columns, ['point_id', 'point id', 'point', 'pointid']),
+    location_source: detectColumn(columns, ['location_source', 'location source', 'loc source', 'source']),
+  };
+}
+
 function toKey(v) {
   if (v === null || v === undefined) return '';
   return String(v);
@@ -785,6 +838,10 @@ function updateSectionsVisibility() {
   const hasSelectedBuilding = state.filters.building && state.filters.building.size > 0;
   const show = hasData && (!needsBuilding || hasSelectedBuilding);
 
+  const callHasData = callState.records.length > 0;
+  const callNeedsBuilding = Boolean(callState.dimCols.building);
+  const showCalls = callHasData && (!callNeedsBuilding || hasSelectedBuilding);
+
   const toggle = (el, on) => {
     if (!el) return;
     el.classList.toggle('hidden', !on);
@@ -792,6 +849,7 @@ function updateSectionsVisibility() {
 
   toggle(els.filtersDetails, show);
   toggle(els.gridCard, show);
+  toggle(els.callCard, showCalls);
   toggle(els.debugSection, show);
 }
 
@@ -1497,7 +1555,7 @@ async function onFileSelected(file) {
 
     // Save the actual PKL so the app can auto-load it next time.
     try {
-      await idbSetLastPkl({ file, bytes });
+      await idbSetPkl(IDB_KEY_ARCHIVE_PKL, { file, bytes });
       await refreshLastDatasetInfo();
       logDebug('Saved dataset to IndexedDB for next launch.');
     } catch (e) {
@@ -1510,6 +1568,131 @@ async function onFileSelected(file) {
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">Failed to load dataset.</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'Load failed.';
   }
+}
+
+function renderCallTable({ maxRows = 200 } = {}) {
+  if (!els.callTableContainer) return;
+
+  const rows = callState.filteredRecords?.length ? callState.filteredRecords : callState.records;
+  if (!rows || rows.length === 0) {
+    els.callTableContainer.innerHTML = '<div class="placeholder">No call rows to display.</div>';
+    return;
+  }
+
+  const cols = callState.columns ?? [];
+  const slice = rows.slice(0, Math.max(0, maxRows));
+
+  const escapeHtml = (s) => String(s)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  const ths = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
+  const trs = slice.map((r) => {
+    const tds = cols.map((c) => `<td>${escapeHtml(r?.[c] ?? '')}</td>`).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  els.callTableContainer.innerHTML = `
+    <div class="grid-scroll">
+      <table class="simple-table">
+        <thead><tr>${ths}</tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:6px;">
+      Showing ${slice.length.toLocaleString()} of ${rows.length.toLocaleString()} call rows.
+    </div>
+  `;
+}
+
+function renderCallSummary() {
+  if (!els.callSummary) return;
+  if (!callState.records.length) {
+    els.callSummary.textContent = 'No call data loaded.';
+    return;
+  }
+
+  const parts = [];
+  if (callState.lastFileInfo?.name) parts.push(callState.lastFileInfo.name);
+  parts.push(`Rows: ${callState.filteredRecords.length.toLocaleString()}/${callState.records.length.toLocaleString()}`);
+
+  const dim = callState.dimCols;
+  const dimBits = [];
+  if (dim.building) dimBits.push(`Building: ${dim.building}`);
+  if (dim.stage) dimBits.push(`Stage: ${dim.stage}`);
+  if (dim.participant) dimBits.push(`Participant: ${dim.participant}`);
+  if (dim.path_id) dimBits.push(`Path ID: ${dim.path_id}`);
+  if (dim.point_id) dimBits.push(`Point ID: ${dim.point_id}`);
+  if (dim.location_source) dimBits.push(`Location Source: ${dim.location_source}`);
+  if (dimBits.length) parts.push(`Detected: ${dimBits.join(' • ')}`);
+
+  els.callSummary.textContent = parts.join(' • ');
+}
+
+async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, idbFile = null }) {
+  enableControls(false);
+  setStatus('Loading call data…');
+
+  try {
+    setStatus('Loading Pyodide + pandas (first load can take a bit)…');
+    await ensurePyodideAvailable();
+    logDebug('Starting Pyodide unpickle (call data)…');
+
+    const { columns, records } = await unpickleDataFrameToRecords(bytes);
+    logDebug('Unpickle succeeded for call data.');
+
+    callState.columns = columns;
+    callState.dimCols = guessCallDimensionColumns(columns);
+    callState.records = records;
+    callState.filteredRecords = records;
+    callState.lastFileInfo = fileInfo;
+
+    renderCallSummary();
+    renderCallTable();
+    updateSectionsVisibility();
+
+    if (saveToIdb) {
+      try {
+        await idbSetPkl(IDB_KEY_CALL_PKL, { file: idbFile, bytes });
+        await refreshLastDatasetInfo();
+        logDebug('Saved call dataset to IndexedDB for next launch.');
+      } catch (e) {
+        logDebug(`Could not save call dataset for next launch: ${e?.message ?? String(e)}`);
+      }
+    }
+
+    setStatus(`Loaded call data: ${records.length.toLocaleString()} rows.`);
+  } catch (err) {
+    console.error(err);
+    logDebug(`Call data load failed: ${err?.stack ?? (err?.message ?? String(err))}`);
+    setStatus(`Call data load failed: ${err?.message ?? String(err)}`, { error: true });
+    if (els.callTableContainer) els.callTableContainer.innerHTML = '<div class="placeholder">Failed to load call data.</div>';
+    if (els.callSummary) els.callSummary.textContent = 'Call data load failed.';
+  } finally {
+    enableControls(true);
+    if (els.zoomSelect) els.zoomSelect.disabled = false;
+    updateSectionsVisibility();
+  }
+}
+
+async function onCallFileSelected(file) {
+  if (!file) return;
+  setStatus('Reading call data file…');
+  logDebug(`Call file selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes)`);
+
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const fileInfo = {
+    name: file?.name ?? '',
+    size: file?.size ?? 0,
+    lastModified: file?.lastModified ?? 0,
+    type: file?.type ?? '',
+  };
+
+  await loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb: true, idbFile: file });
 }
 
 if (els.exportExcel) {
@@ -1590,7 +1773,7 @@ if (els.clearBuildings && els.buildingSelect) {
 async function tryAutoLoadSavedDataset() {
   enableControls(false);
   try {
-    const rec = await idbGetLastPkl();
+    const rec = await idbGetPkl(IDB_KEY_ARCHIVE_PKL);
     if (!rec?.blob || !rec?.meta?.name) {
       setStatus('Ready. Choose a .pkl file to begin.');
       enableControls(true);
@@ -1663,8 +1846,39 @@ async function tryAutoLoadSavedDataset() {
   }
 }
 
+async function tryAutoLoadSavedCallDataset() {
+  try {
+    const rec = await idbGetPkl(IDB_KEY_CALL_PKL);
+    if (!rec?.blob || !rec?.meta?.name) return false;
+
+    setStatus(`Auto-loading saved call data: ${rec.meta.name} (starting Pyodide)…`);
+    logDebug(`Auto-loading saved call data: ${rec.meta.name}`);
+
+    await ensurePyodideAvailable();
+    const buf = await rec.blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+
+    const fakeFile = {
+      name: rec.meta.name,
+      size: rec.meta.size,
+      lastModified: rec.meta.lastModified,
+      type: rec.meta.type,
+    };
+
+    await loadCallDatasetFromBytes({ bytes, fileInfo: fakeFile, saveToIdb: false });
+    return true;
+  } catch (e) {
+    logDebug(`Auto-load (call data) failed: ${e?.message ?? String(e)}`);
+    return false;
+  }
+}
+
 // Attempt auto-load after module init.
-tryAutoLoadSavedDataset();
+(async () => {
+  await refreshLastDatasetInfo();
+  await tryAutoLoadSavedDataset();
+  await tryAutoLoadSavedCallDataset();
+})();
 
 // File input events
 if (!els.fileInput) {
@@ -1680,6 +1894,20 @@ if (!els.fileInput) {
     if (!file) return;
     logDebug('fileInput change event fired.');
     onFileSelected(file);
+  });
+}
+
+// Call-data file input events
+if (els.callFileInput) {
+  els.callFileInput.addEventListener('click', () => {
+    els.callFileInput.value = '';
+  });
+
+  els.callFileInput.addEventListener('change', () => {
+    const file = els.callFileInput.files?.[0];
+    if (!file) return;
+    logDebug('callFileInput change event fired.');
+    onCallFileSelected(file);
   });
 }
 
