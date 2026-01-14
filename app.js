@@ -30,6 +30,11 @@ const state = {
   lastPivot: null,
   lastRowHeaderCols: null,
 
+  metricCols: {
+    h80: null,
+    v80: null,
+  },
+
   dimCols: {
     stage: null,
     building: null,
@@ -167,6 +172,47 @@ function detectColumn(columns, candidates) {
   return null;
 }
 
+function guessMetricColumns(columns) {
+  const h = detectColumn(columns, [
+    'h80',
+    'hor 80%',
+    'horizontal 80%',
+    'horizontal_80%',
+    'horizontal80',
+    'hor80',
+    'horizontal 80',
+  ]);
+  const v = detectColumn(columns, [
+    'v80',
+    'ver 80%',
+    'vertical 80%',
+    'vertical_80%',
+    'vertical80',
+    'ver80',
+    'vertical 80',
+  ]);
+  return { h80: h, v80: v };
+}
+
+function getMetricConfig() {
+  const keys = [];
+  const labels = {};
+
+  const h = state.metricCols?.h80;
+  const v = state.metricCols?.v80;
+
+  if (h) {
+    keys.push(h);
+    labels[h] = METRIC_LABELS.h80;
+  }
+  if (v) {
+    keys.push(v);
+    labels[v] = METRIC_LABELS.v80;
+  }
+
+  return { metricKeys: keys, metricLabels: labels };
+}
+
 function setExportEnabled(enabled) {
   if (!els.exportExcel) return;
   els.exportExcel.disabled = !enabled;
@@ -240,8 +286,13 @@ function exportCurrentPivotToExcel() {
   const leftCols = rowHeaderCols.map((c) => (typeof c === 'string' ? ({ key: c, label: c }) : c));
   const leftCount = leftCols.length;
   const stages = pivot.cols;
-  const metricKeys = METRICS;
+  const { metricKeys, metricLabels } = getMetricConfig();
   const metricCount = metricKeys.length;
+
+  if (!metricCount) {
+    setStatus('Could not find metric columns (Horizontal/Vertical 80%).', { error: true });
+    return;
+  }
 
   const lastCol = leftCount + stages.length * metricCount - 1;
 
@@ -264,7 +315,7 @@ function exportCurrentPivotToExcel() {
   const headerSub = Array(leftCount).fill('');
   for (const _s of stages) {
     for (const m of metricKeys) {
-      headerSub.push(String(METRIC_LABELS[m] ?? m));
+      headerSub.push(String(metricLabels?.[m] ?? m));
     }
   }
 
@@ -1102,11 +1153,17 @@ function render() {
     return;
   }
 
+  const { metricKeys, metricLabels } = getMetricConfig();
+  if (!metricKeys.length) {
+    setStatus('Could not detect metric columns (Horizontal/Vertical 80%).', { error: true });
+    return;
+  }
+
   const pivot = buildPivot({
     records: state.filteredRecords,
     rowKey: rowKeys,
     colKey,
-    valueKey: METRICS,
+    valueKey: metricKeys,
   });
 
   // Ensure results rows follow the same preferred Section ordering used in the filters UI.
@@ -1124,7 +1181,7 @@ function render() {
   setExportEnabled(true);
 
   if (els.gridSummary) {
-    const metricText = METRICS.map((m) => METRIC_LABELS[m] ?? m).join(', ');
+    const metricText = metricKeys.map((m) => metricLabels?.[m] ?? m).join(', ');
     els.gridSummary.textContent = `Rows: ${pivot.rows.length} • Columns: ${pivot.cols.length} • Metrics: ${metricText} • Filtered: ${state.filteredRecords.length.toLocaleString()}/${state.records.length.toLocaleString()}`;
   }
 
@@ -1132,8 +1189,8 @@ function render() {
     container: els.gridContainer,
     pivot,
     rowHeaderKeys: rowHeaderCols,
-    metricKeys: METRICS,
-    metricLabels: METRIC_LABELS,
+    metricKeys,
+    metricLabels,
     valueFormatter: (v) => {
       if (v === null || v === undefined || v === '') return '';
       const num = typeof v === 'number' ? v : Number(v);
@@ -1160,6 +1217,7 @@ async function onFileSelected(file) {
 
     state.columns = columns;
     state.dimCols = guessDimensionColumns(columns);
+    state.metricCols = guessMetricColumns(columns);
     state.records = records;
 
     // Cache known building values for case-insensitive mapping (manual input).
