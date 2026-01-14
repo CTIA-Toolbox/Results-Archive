@@ -1,5 +1,5 @@
 import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=30';
-import { buildPivot, renderPivotGrid } from './pivot.js?v=30';
+import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 
 const els = {
   fileInput: document.getElementById('fileInput'),
