@@ -10,6 +10,9 @@ const els = {
   zoomSelect: document.getElementById('zoomSelect'),
   exportExcel: document.getElementById('exportExcel'),
   lastDatasetInfo: document.getElementById('lastDatasetInfo'),
+  filtersDetails: document.getElementById('filtersDetails'),
+  gridCard: document.getElementById('gridCard'),
+  debugSection: document.getElementById('debugSection'),
   debugLog: document.getElementById('debugLog'),
   filtersContainer: document.getElementById('filtersContainer'),
   filtersHint: document.getElementById('filtersHint'),
@@ -69,6 +72,56 @@ const IDB_DB_NAME = 'resultsArchive';
 const IDB_DB_VERSION = 1;
 const IDB_STORE_FILES = 'files';
 const IDB_KEY_LAST_PKL = 'lastPkl';
+
+const PYODIDE_CDN_URL = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
+
+function ensureExternalScript({ url, globalName, timeoutMs = 30000 }) {
+  // If already present, no-op.
+  if (globalName && globalName in window) return Promise.resolve();
+
+  // If a script with this URL already exists, wait for it.
+  const existing = Array.from(document.scripts).find((s) => s.src === url);
+  if (existing) {
+    if (globalName && globalName in window) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`Timed out loading ${url}`)), timeoutMs);
+      existing.addEventListener('load', () => {
+        clearTimeout(t);
+        resolve();
+      });
+      existing.addEventListener('error', () => {
+        clearTimeout(t);
+        reject(new Error(`Failed to load ${url}`));
+      });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    const t = setTimeout(() => {
+      script.remove();
+      reject(new Error(`Timed out loading ${url}`));
+    }, timeoutMs);
+    script.onload = () => {
+      clearTimeout(t);
+      resolve();
+    };
+    script.onerror = () => {
+      clearTimeout(t);
+      reject(new Error(`Failed to load ${url}`));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function ensurePyodideAvailable() {
+  // loadPyodide is provided by pyodide.js
+  if ('loadPyodide' in window) return;
+  logDebug('Pyodide global not found; injecting pyodide.js…');
+  await ensureExternalScript({ url: PYODIDE_CDN_URL, globalName: 'loadPyodide', timeoutMs: 60000 });
+}
 
 function formatBytes(n) {
   const num = Number(n);
@@ -726,6 +779,25 @@ function enableControls(enabled) {
   if (els.clearBuildingText) els.clearBuildingText.disabled = !buildingEnabled;
 }
 
+function updateSectionsVisibility() {
+  const hasData = state.records.length > 0;
+  const needsBuilding = Boolean(state.dimCols.building);
+  const hasSelectedBuilding = state.filters.building && state.filters.building.size > 0;
+  const show = hasData && (!needsBuilding || hasSelectedBuilding);
+
+  const toggle = (el, on) => {
+    if (!el) return;
+    el.classList.toggle('hidden', !on);
+  };
+
+  toggle(els.filtersDetails, show);
+  toggle(els.gridCard, show);
+  toggle(els.debugSection, show);
+}
+
+// Initial visibility (no data yet).
+updateSectionsVisibility();
+
 function syncBuildingSelectFromState() {
   if (!els.buildingSelect) return;
   const selected = state.filters.building;
@@ -1362,6 +1434,7 @@ async function onFileSelected(file) {
     const bytes = new Uint8Array(buf);
 
     setStatus('Loading Pyodide + pandas (first load can take a bit)…');
+    await ensurePyodideAvailable();
     logDebug('Starting Pyodide unpickle…');
 
     const { columns, records } = await unpickleDataFrameToRecords(bytes);
@@ -1393,6 +1466,8 @@ async function onFileSelected(file) {
     state.idBySection.clear();
     if (els.buildingText) els.buildingText.value = '';
 
+    updateSectionsVisibility();
+
     populateBuildingSelectOptions();
     syncBuildingSelectFromState();
 
@@ -1417,6 +1492,8 @@ async function onFileSelected(file) {
     logDebug(`Loaded ${records.length} rows, ${columns.length} columns.`);
 
     render();
+
+    updateSectionsVisibility();
 
     // Save the actual PKL so the app can auto-load it next time.
     try {
@@ -1485,6 +1562,7 @@ if (els.buildingSelect) {
     applyFilters();
     buildFiltersUI();
     render();
+    updateSectionsVisibility();
   });
 }
 if (els.selectAllBuildings && els.buildingSelect) {
@@ -1495,6 +1573,7 @@ if (els.selectAllBuildings && els.buildingSelect) {
     applyFilters();
     buildFiltersUI();
     render();
+    updateSectionsVisibility();
   });
 }
 if (els.clearBuildings && els.buildingSelect) {
@@ -1504,20 +1583,24 @@ if (els.clearBuildings && els.buildingSelect) {
     applyFilters();
     buildFiltersUI();
     render();
+    updateSectionsVisibility();
   });
 }
 
 async function tryAutoLoadSavedDataset() {
+  enableControls(false);
   try {
     const rec = await idbGetLastPkl();
     if (!rec?.blob || !rec?.meta?.name) {
       setStatus('Ready. Choose a .pkl file to begin.');
+      enableControls(true);
       return false;
     }
 
-    enableControls(false);
-    setStatus(`Auto-loading saved dataset: ${rec.meta.name}…`);
+    setStatus(`Auto-loading saved dataset: ${rec.meta.name} (starting Pyodide)…`);
     logDebug(`Auto-loading saved dataset: ${rec.meta.name}`);
+
+    await ensurePyodideAvailable();
 
     const buf = await rec.blob.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -1530,48 +1613,52 @@ async function tryAutoLoadSavedDataset() {
       type: rec.meta.type,
     };
 
-    // This will unpickle and render, but will NOT save filters.
-    await (async () => {
-      const { columns, records } = await unpickleDataFrameToRecords(bytes);
+    const { columns, records } = await unpickleDataFrameToRecords(bytes);
 
-      state.columns = columns;
-      state.dimCols = guessDimensionColumns(columns);
-      state.metricCols = guessMetricColumns(columns);
-      state.records = records;
-      state.lastFileInfo = fakeFile;
+    state.columns = columns;
+    state.dimCols = guessDimensionColumns(columns);
+    state.metricCols = guessMetricColumns(columns);
+    state.records = records;
+    state.lastFileInfo = fakeFile;
 
-      // Cache known building values for case-insensitive mapping (manual input).
-      state.knownBuildings = [];
-      state.knownBuildingsLowerMap = new Map();
-      if (state.dimCols.building) {
-        const vals = uniqSortedValues(state.records, state.dimCols.building, 20000);
-        state.knownBuildings = vals;
-        for (const v of vals) state.knownBuildingsLowerMap.set(String(v).toLowerCase(), v);
-      }
+    // Cache known building values for case-insensitive mapping (manual input).
+    state.knownBuildings = [];
+    state.knownBuildingsLowerMap = new Map();
+    if (state.dimCols.building) {
+      const vals = uniqSortedValues(state.records, state.dimCols.building, 20000);
+      state.knownBuildings = vals;
+      for (const v of vals) state.knownBuildingsLowerMap.set(String(v).toLowerCase(), v);
+    }
+    logDebug(`Auto-load: detected building column: ${state.dimCols.building ?? '(none)'}; buildings found: ${state.knownBuildings.length}`);
 
-      // Reset filters on auto-load (per request).
-      for (const k of Object.keys(state.filters)) state.filters[k].clear();
-      state.idBySection.clear();
-      if (els.buildingText) els.buildingText.value = '';
+    // Reset filters on auto-load (per request).
+    for (const k of Object.keys(state.filters)) state.filters[k].clear();
+    state.idBySection.clear();
+    if (els.buildingText) els.buildingText.value = '';
 
-      populateBuildingSelectOptions();
-      syncBuildingSelectFromState();
+    updateSectionsVisibility();
 
-      applyFilters();
-      buildFiltersUI();
+    populateBuildingSelectOptions();
+    syncBuildingSelectFromState();
 
-      enableControls(true);
-      if (els.zoomSelect) els.zoomSelect.disabled = false;
-      setExportEnabled(false);
-      setStatus(`Loaded ${records.length.toLocaleString()} rows (auto-loaded). Select building(s) above to begin.`);
-      logDebug(`Auto-loaded ${records.length} rows, ${columns.length} columns.`);
-      render();
-    })();
+    applyFilters();
+    buildFiltersUI();
+
+    enableControls(true);
+    if (els.zoomSelect) els.zoomSelect.disabled = false;
+    setExportEnabled(false);
+    setStatus(`Loaded ${records.length.toLocaleString()} rows (auto-loaded). Select building(s) above to begin.`);
+    logDebug(`Auto-loaded ${records.length} rows, ${columns.length} columns.`);
+    render();
+
+    updateSectionsVisibility();
 
     return true;
   } catch (e) {
     logDebug(`Auto-load failed: ${e?.message ?? String(e)}`);
     setStatus('Ready. Choose a .pkl file to begin.');
+    enableControls(true);
+    updateSectionsVisibility();
     return false;
   }
 }
