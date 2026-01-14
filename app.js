@@ -8,6 +8,7 @@ const els = {
   gridContainer: document.getElementById('gridContainer'),
   gridSummary: document.getElementById('gridSummary'),
   zoomSelect: document.getElementById('zoomSelect'),
+  exportExcel: document.getElementById('exportExcel'),
   debugLog: document.getElementById('debugLog'),
   filtersContainer: document.getElementById('filtersContainer'),
   filtersHint: document.getElementById('filtersHint'),
@@ -25,6 +26,9 @@ const state = {
   columns: [],
   records: [],
   filteredRecords: [],
+
+  lastPivot: null,
+  lastRowHeaderCols: null,
 
   dimCols: {
     stage: null,
@@ -161,6 +165,244 @@ function detectColumn(columns, candidates) {
     if (idx >= 0) return columns[idx];
   }
   return null;
+}
+
+function setExportEnabled(enabled) {
+  if (!els.exportExcel) return;
+  els.exportExcel.disabled = !enabled;
+}
+
+function safeFilePart(s) {
+  return String(s ?? '')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80);
+}
+
+function formatDateForFilename(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+function buildFiltersSummaryAoA() {
+  const lines = [];
+  const setToText = (set) => {
+    if (!set) return '';
+    if (set.size === 0) return 'All';
+    return Array.from(set).join(', ');
+  };
+
+  lines.push(['Results Archive Export']);
+  lines.push(['Exported at', new Date().toLocaleString()]);
+  lines.push(['Build', document.getElementById('buildStamp')?.textContent ?? '']);
+  lines.push([]);
+
+  lines.push(['Buildings', setToText(state.filters.building)]);
+  lines.push(['Participant', setToText(state.filters.participant)]);
+  lines.push(['OS', setToText(state.filters.os)]);
+  lines.push(['Stage', setToText(state.filters.stage)]);
+  lines.push(['Section', setToText(state.filters.row_type)]);
+
+  if (state.idBySection && state.idBySection.size) {
+    lines.push([]);
+    lines.push(['Identifier filters']);
+    const sections = sortByPreferredOrder(Array.from(state.idBySection.keys()), SECTION_ORDER);
+    for (const sec of sections) {
+      const set = state.idBySection.get(sec);
+      if (!set || set.size === 0) continue;
+      lines.push([`Identifier — ${sec}`, `${set.size} selected`]);
+    }
+  }
+
+  return lines;
+}
+
+function exportCurrentPivotToExcel() {
+  const XLSX = window.XLSX;
+  if (!XLSX) {
+    setStatus('Excel export library not loaded yet. Please refresh and try again.', { error: true });
+    return;
+  }
+
+  const pivot = state.lastPivot;
+  const rowHeaderCols = state.lastRowHeaderCols;
+  if (!pivot || !Array.isArray(pivot.cols) || !Array.isArray(pivot.rows) || !rowHeaderCols) {
+    setStatus('Nothing to export yet (load data + select building(s)).', { error: true });
+    return;
+  }
+
+  const leftCols = rowHeaderCols.map((c) => (typeof c === 'string' ? ({ key: c, label: c }) : c));
+  const leftCount = leftCols.length;
+  const stages = pivot.cols;
+  const metricKeys = METRICS;
+  const metricCount = metricKeys.length;
+
+  // Build a two-row header like the UI, but make subheaders unique for Excel filtering.
+  const headerTop = Array(leftCount).fill('');
+  for (const s of stages) {
+    headerTop.push(String(s));
+    for (let i = 1; i < metricCount; i++) headerTop.push('');
+  }
+
+  const headerSub = leftCols.map((c) => String(c?.label ?? c?.key ?? ''));
+  for (const s of stages) {
+    for (const m of metricKeys) {
+      const ml = METRIC_LABELS[m] ?? m;
+      headerSub.push(`${s} ${ml}`);
+    }
+  }
+
+  const aoa = [headerTop, headerSub];
+
+  for (const rowId of pivot.rows) {
+    const meta = pivot.rowMeta?.get(rowId) ?? {};
+    const row = [];
+    for (const c of leftCols) {
+      const v = meta?.[c.key];
+      row.push(v === null || v === undefined ? '' : String(v));
+    }
+    const rowMap = pivot.matrix?.get(rowId);
+    for (const s of stages) {
+      const raw = rowMap ? rowMap.get(String(s)) : undefined;
+      for (const m of metricKeys) {
+        const v = raw && typeof raw === 'object' ? raw[m] : undefined;
+        const num = typeof v === 'number' ? v : Number(v);
+        row.push(Number.isFinite(num) ? num : '');
+      }
+    }
+    aoa.push(row);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  const lastCol = leftCount + stages.length * metricCount - 1;
+  const lastRow = aoa.length - 1;
+
+  // Stage merges in the top header row.
+  ws['!merges'] = ws['!merges'] || [];
+  for (let i = 0; i < stages.length; i++) {
+    const start = leftCount + i * metricCount;
+    const end = start + metricCount - 1;
+    if (end > start) ws['!merges'].push({ s: { r: 0, c: start }, e: { r: 0, c: end } });
+  }
+
+  // Freeze panes (2 header rows + left identity columns).
+  const topLeftCell = XLSX.utils.encode_cell({ r: 2, c: leftCount });
+  ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit: 2, topLeftCell, activePane: 'bottomRight' } }];
+
+  // AutoFilter on the second header row.
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } }) };
+
+  // Column widths (roughly based on text length).
+  const maxChars = new Array(lastCol + 1).fill(6);
+  const sampleRows = Math.min(aoa.length, 400); // cap work
+  for (let r = 0; r < sampleRows; r++) {
+    const row = aoa[r];
+    for (let c = 0; c <= lastCol; c++) {
+      const v = row?.[c];
+      const s = v === null || v === undefined ? '' : String(v);
+      maxChars[c] = Math.min(60, Math.max(maxChars[c], s.length));
+    }
+  }
+  ws['!cols'] = maxChars.map((wch, i) => {
+    // Give left columns a bit more room.
+    const bonus = i < leftCount ? 4 : 0;
+    return { wch: Math.min(64, Math.max(8, wch + bonus)) };
+  });
+
+  // Styling (xlsx-js-style)
+  const BORDER = {
+    top: { style: 'thin', color: { rgb: 'FF2A3550' } },
+    bottom: { style: 'thin', color: { rgb: 'FF2A3550' } },
+    left: { style: 'thin', color: { rgb: 'FF2A3550' } },
+    right: { style: 'thin', color: { rgb: 'FF2A3550' } },
+  };
+
+  const STYLE_TOP = {
+    font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: BORDER,
+  };
+
+  const STYLE_SUB = {
+    font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF121B2E' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: BORDER,
+  };
+
+  const STYLE_LEFT_SUB = {
+    ...STYLE_SUB,
+    alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+  };
+
+  const STYLE_NUM = {
+    alignment: { horizontal: 'right', vertical: 'top' },
+    border: BORDER,
+    numFmt: '0.00',
+  };
+
+  const STYLE_TEXT = {
+    alignment: { horizontal: 'left', vertical: 'top' },
+    border: BORDER,
+  };
+
+  const STYLE_ZEBRA = {
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF0B1220' } },
+  };
+
+  const applyStyle = (r, c, style) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    const cell = ws[addr];
+    if (!cell) return;
+    cell.s = { ...(cell.s || {}), ...(style || {}) };
+  };
+
+  // Row heights
+  ws['!rows'] = ws['!rows'] || [];
+  ws['!rows'][0] = { hpt: 22 };
+  ws['!rows'][1] = { hpt: 28 };
+
+  // Header styles
+  for (let c = 0; c <= lastCol; c++) {
+    applyStyle(0, c, STYLE_TOP);
+    applyStyle(1, c, c < leftCount ? STYLE_LEFT_SUB : STYLE_SUB);
+  }
+
+  // Data styles + zebra striping
+  for (let r = 2; r <= lastRow; r++) {
+    const zebra = (r % 2 === 0) ? STYLE_ZEBRA : null;
+    for (let c = 0; c <= lastCol; c++) {
+      const isMetric = c >= leftCount;
+      const base = isMetric ? STYLE_NUM : STYLE_TEXT;
+      applyStyle(r, c, base);
+      if (zebra) applyStyle(r, c, zebra);
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Results');
+
+  // Filters/metadata sheet
+  const ws2 = XLSX.utils.aoa_to_sheet(buildFiltersSummaryAoA());
+  ws2['!cols'] = [{ wch: 24 }, { wch: 120 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Filters');
+
+  const dt = new Date();
+  const buildingPart = state.filters.building && state.filters.building.size
+    ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
+    : '';
+  const filename = `Results_Archive_${formatDateForFilename(dt)}${buildingPart}.xlsx`;
+
+  try {
+    XLSX.writeFile(wb, filename, { compression: true });
+    setStatus(`Exported Excel: ${filename}`);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
+  }
 }
 
 function guessDimensionColumns(columns) {
@@ -779,9 +1021,13 @@ function buildFiltersUI() {
   if (renderStandardFilter({ logicalKey: 'os', label: 'OS' })) addedAny = true;
 
   if (els.filtersHint) {
-    els.filtersHint.textContent = addedAny
-      ? 'Filters: click a button to choose values (empty = All). Identifier filters appear per selected Section.'
-      : 'No filterable columns detected. Update column detection heuristics in app.js.';
+    if (addedAny) {
+      els.filtersHint.textContent = '';
+      els.filtersHint.style.display = 'none';
+    } else {
+      els.filtersHint.style.display = '';
+      els.filtersHint.textContent = 'No filterable columns detected. Update column detection heuristics in app.js.';
+    }
   }
 }
 
@@ -789,6 +1035,9 @@ function render() {
   if (!state.records.length) {
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">Waiting for dataset…</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'No data loaded.';
+    state.lastPivot = null;
+    state.lastRowHeaderCols = null;
+    setExportEnabled(false);
     return;
   }
 
@@ -797,12 +1046,18 @@ function render() {
   if (state.dimCols.building && state.filters.building.size === 0) {
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">Select one or more buildings to begin.</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'No buildings selected.';
+    state.lastPivot = null;
+    state.lastRowHeaderCols = null;
+    setExportEnabled(false);
     return;
   }
 
   if (!state.filteredRecords.length) {
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">No rows match the selected filters.</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'No matching rows.';
+    state.lastPivot = null;
+    state.lastRowHeaderCols = null;
+    setExportEnabled(false);
     return;
   }
 
@@ -835,6 +1090,10 @@ function render() {
       },
     });
   }
+
+  state.lastPivot = pivot;
+  state.lastRowHeaderCols = rowHeaderCols;
+  setExportEnabled(true);
 
   if (els.gridSummary) {
     const metricText = METRICS.map((m) => METRIC_LABELS[m] ?? m).join(', ');
@@ -908,6 +1167,7 @@ async function onFileSelected(file) {
 
     enableControls(true);
     if (els.zoomSelect) els.zoomSelect.disabled = false;
+    setExportEnabled(false);
     setStatus(`Loaded ${records.length.toLocaleString()} rows. Select building(s) above to begin.`);
     logDebug(`Loaded ${records.length} rows, ${columns.length} columns.`);
 
@@ -919,6 +1179,10 @@ async function onFileSelected(file) {
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">Failed to load dataset.</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'Load failed.';
   }
+}
+
+if (els.exportExcel) {
+  els.exportExcel.addEventListener('click', () => exportCurrentPivotToExcel());
 }
 
 // Grid scale control
