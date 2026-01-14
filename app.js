@@ -51,6 +51,8 @@ const state = {
     stage: null,
     building: null,
     participant: null,
+    path_id: null,
+    point_id: null,
     os: null,
     row_type: null,
     id: null,
@@ -457,6 +459,11 @@ function setExportEnabled(enabled) {
   els.exportExcel.disabled = !enabled;
 }
 
+function setCallsExportEnabled(enabled) {
+  if (!els.exportCallsExcel) return;
+  els.exportCallsExcel.disabled = !enabled;
+}
+
 function safeFilePart(s) {
   return String(s ?? '')
     .trim()
@@ -492,7 +499,10 @@ function buildFiltersSummaryAoA() {
   lines.push(['Participant', setToText(state.filters.participant)]);
   lines.push(['OS', setToText(state.filters.os)]);
   lines.push(['Stage', setToText(state.filters.stage)]);
+  lines.push(['Path ID', setToText(state.filters.path_id)]);
+  lines.push(['Point ID', setToText(state.filters.point_id)]);
   lines.push(['Section', setToText(state.filters.row_type)]);
+  lines.push(['Location Source', setToText(state.filters.location_source)]);
 
   if (state.idBySection && state.idBySection.size) {
     lines.push([]);
@@ -506,6 +516,109 @@ function buildFiltersSummaryAoA() {
   }
 
   return lines;
+}
+
+function buildCallFiltersSummaryAoA() {
+  const lines = [];
+  const setToText = (set) => {
+    if (!set) return '';
+    if (set.size === 0) return 'All';
+    return Array.from(set).join(', ');
+  };
+
+  lines.push(['Call Data Export']);
+  lines.push(['Exported at', new Date().toLocaleString()]);
+  lines.push(['Build', document.getElementById('buildStamp')?.textContent ?? '']);
+  lines.push([]);
+
+  lines.push(['Buildings', setToText(state.filters.building)]);
+  lines.push(['Participant', setToText(state.filters.participant)]);
+  lines.push(['Stage', setToText(state.filters.stage)]);
+  lines.push(['Path ID', setToText(state.filters.path_id)]);
+  lines.push(['Point ID', setToText(state.filters.point_id)]);
+  lines.push(['Location Source', setToText(state.filters.location_source)]);
+
+  return lines;
+}
+
+function exportCallsToExcel() {
+  const XLSX = window.XLSX;
+  if (!XLSX) {
+    setStatus('Excel export library not loaded yet. Please refresh and try again.', { error: true });
+    return;
+  }
+
+  if (!callState.records.length) {
+    setStatus('No call data loaded yet.', { error: true });
+    return;
+  }
+
+  const rows = callState.filteredRecords?.length ? callState.filteredRecords : [];
+  if (!rows.length) {
+    setStatus('No call rows match the selected filters.', { error: true });
+    return;
+  }
+
+  const cols = (callState.columns ?? []).slice();
+  if (!cols.length) {
+    setStatus('Call data has no detected columns to export.', { error: true });
+    return;
+  }
+
+  const aoa = [cols];
+  for (const r of rows) {
+    aoa.push(cols.map((c) => {
+      const v = r?.[c];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'number') return v;
+      return String(v);
+    }));
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Freeze header row.
+  const ySplit = 1;
+  const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: 0 });
+  ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: 0, ySplit, topLeftCell, activePane: 'bottomLeft' } }];
+
+  // Autofilter the full range.
+  const lastRow = aoa.length - 1;
+  const lastCol = cols.length - 1;
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+
+  // Light column sizing based on first N rows.
+  const maxChars = new Array(cols.length).fill(6);
+  const sampleRows = Math.min(aoa.length, 300);
+  for (let r = 0; r < sampleRows; r++) {
+    for (let c = 0; c < cols.length; c++) {
+      const v = aoa[r]?.[c];
+      const s = v === null || v === undefined ? '' : String(v);
+      maxChars[c] = Math.min(70, Math.max(maxChars[c], s.length));
+    }
+  }
+  ws['!cols'] = maxChars.map((wch) => ({ wch: Math.min(72, Math.max(8, wch)) }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Call Data');
+
+  const ws2 = XLSX.utils.aoa_to_sheet(buildCallFiltersSummaryAoA());
+  ws2['!cols'] = [{ wch: 24 }, { wch: 120 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Filters');
+
+  const dt = new Date();
+  const buildingPart = state.filters.building && state.filters.building.size
+    ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
+    : '';
+  const filename = `Call_Data_${formatDateForFilename(dt)}${buildingPart}.xlsx`;
+
+  try {
+    XLSX.writeFile(wb, filename, { compression: true });
+    setStatus(`Exported Excel: ${filename}`);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
+  }
 }
 
 function exportCurrentPivotToExcel() {
@@ -736,6 +849,8 @@ function guessDimensionColumns(columns) {
     stage: detectColumn(columns, ['stage', 'stg', 'phase']),
     building: detectColumn(columns, ['building_id', 'building', 'bldg', 'site', 'location']),
     participant: detectColumn(columns, ['participant', 'carrier', 'name', 'user', 'person']),
+    path_id: detectColumn(columns, ['path_id', 'path id', 'path', 'pathid']),
+    point_id: detectColumn(columns, ['point_id', 'point id', 'point', 'pointid']),
     os: detectColumn(columns, ['os', 'operating system', 'platform']),
     row_type: detectColumn(columns, ['row_type', 'row type', 'type', 'section']),
     id: detectColumn(columns, ['id', 'label', 'name']),
@@ -787,8 +902,31 @@ function filterRecordsWithActive(records, activeEntries) {
   });
 }
 
+function filterRecordsWithActiveByDim(records, activeEntries, dimCols) {
+  if (!activeEntries.length) return records;
+  return records.filter((r) => {
+    for (const [logicalKey, selected] of activeEntries) {
+      const col = dimCols?.[logicalKey];
+      if (!col) continue;
+      const value = toKey(r?.[col]);
+      if (!selected.has(value)) return false;
+    }
+    return true;
+  });
+}
+
 function buildingScopedRecords(records) {
   const buildingCol = state.dimCols.building;
+  if (!buildingCol) return records;
+
+  const selectedBuildings = state.filters.building;
+  if (!selectedBuildings || selectedBuildings.size === 0) return records;
+
+  return records.filter((r) => selectedBuildings.has(toKey(r?.[buildingCol])));
+}
+
+function buildingScopedRecordsByDim(records, dimCols) {
+  const buildingCol = dimCols?.building;
   if (!buildingCol) return records;
 
   const selectedBuildings = state.filters.building;
@@ -965,6 +1103,10 @@ function applyFilters() {
 
   if (requireBuildingSelection && (!selectedBuildings || selectedBuildings.size === 0)) {
     state.filteredRecords = [];
+    callState.filteredRecords = [];
+    renderCallSummary();
+    renderCallTable();
+    setCallsExportEnabled(false);
     return;
   }
 
@@ -1002,6 +1144,19 @@ function applyFilters() {
   }
 
   state.filteredRecords = out;
+
+  // Apply the same filter sets to call data (only for columns present in callState.dimCols).
+  if (callState.records.length) {
+    const scopedCalls = buildingScopedRecordsByDim(callState.records, callState.dimCols);
+    const callOut = active.length ? filterRecordsWithActiveByDim(scopedCalls, active, callState.dimCols) : scopedCalls;
+    callState.filteredRecords = callOut;
+  } else {
+    callState.filteredRecords = [];
+  }
+
+  renderCallSummary();
+  renderCallTable();
+  setCallsExportEnabled(callState.filteredRecords.length > 0);
 }
 
 function clearAllFilters() {
@@ -1207,6 +1362,15 @@ function buildFiltersUI() {
   if (!els.filtersContainer) return;
   els.filtersContainer.innerHTML = '';
 
+  const hasAnyData = state.records.length > 0 || callState.records.length > 0;
+  if (!hasAnyData) {
+    if (els.filtersHint) {
+      els.filtersHint.style.display = '';
+      els.filtersHint.textContent = 'Load a file to enable filters.';
+    }
+    return;
+  }
+
   const buildingCol = state.dimCols.building;
   const requireBuildingSelection = Boolean(buildingCol);
   const hasSelectedBuildings = state.filters.building && state.filters.building.size > 0;
@@ -1218,13 +1382,24 @@ function buildFiltersUI() {
     return;
   }
 
-  const buildingScoped = buildingScopedRecords(state.records);
+  const buildingScopedArchive = buildingScopedRecords(state.records);
+  const buildingScopedCalls = buildingScopedRecordsByDim(callState.records, callState.dimCols);
+
+  const unionValues = (a, b) => {
+    const s = new Set();
+    for (const v of a ?? []) s.add(v);
+    for (const v of b ?? []) s.add(v);
+    return Array.from(s).sort((x, y) => String(x).localeCompare(String(y)));
+  };
 
   const renderStandardFilter = ({ logicalKey, label }) => {
-    const col = state.dimCols[logicalKey];
-    if (!col) return false;
+    const archiveCol = state.dimCols[logicalKey];
+    const callCol = callState.dimCols?.[logicalKey];
+    if (!archiveCol && !callCol) return false;
 
-    let values = uniqSortedValues(buildingScoped, col);
+    const archiveValues = archiveCol ? uniqSortedValues(buildingScopedArchive, archiveCol) : [];
+    const callValues = callCol ? uniqSortedValues(buildingScopedCalls, callCol) : [];
+    let values = unionValues(archiveValues, callValues);
     if (!values.length) return false;
 
     if (logicalKey === 'row_type') {
@@ -1302,7 +1477,7 @@ function buildFiltersUI() {
       const sections = sortByPreferredOrder(Array.from(selectedSections), SECTION_ORDER);
 
       for (const sec of sections) {
-        const sectionOnly = buildingScoped.filter((r) => toKey(r?.[sectionCol]) === sec);
+        const sectionOnly = buildingScopedArchive.filter((r) => toKey(r?.[sectionCol]) === sec);
         const scoped = otherActive.length ? filterRecordsWithActive(sectionOnly, otherActive) : sectionOnly;
         let values;
         let allowedKeys;
@@ -1379,7 +1554,10 @@ function buildFiltersUI() {
 
   // Render remaining filters.
   if (renderStandardFilter({ logicalKey: 'stage', label: 'Stage' })) addedAny = true;
+  if (renderStandardFilter({ logicalKey: 'path_id', label: 'Path ID' })) addedAny = true;
+  if (renderStandardFilter({ logicalKey: 'point_id', label: 'Point ID' })) addedAny = true;
   if (renderStandardFilter({ logicalKey: 'os', label: 'OS' })) addedAny = true;
+  if (renderStandardFilter({ logicalKey: 'location_source', label: 'Location Source' })) addedAny = true;
 
   if (els.filtersHint) {
     if (addedAny) {
@@ -1399,6 +1577,7 @@ function render() {
     state.lastPivot = null;
     state.lastRowHeaderCols = null;
     setExportEnabled(false);
+    setCallsExportEnabled(callState.filteredRecords.length > 0);
     return;
   }
 
@@ -1652,6 +1831,7 @@ async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, id
 
     renderCallSummary();
     renderCallTable();
+    setCallsExportEnabled(callState.filteredRecords.length > 0);
     updateSectionsVisibility();
 
     if (saveToIdb) {
@@ -1674,6 +1854,7 @@ async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, id
   } finally {
     enableControls(true);
     if (els.zoomSelect) els.zoomSelect.disabled = false;
+    setCallsExportEnabled(callState.filteredRecords.length > 0);
     updateSectionsVisibility();
   }
 }
@@ -1697,6 +1878,10 @@ async function onCallFileSelected(file) {
 
 if (els.exportExcel) {
   els.exportExcel.addEventListener('click', () => exportCurrentPivotToExcel());
+}
+
+if (els.exportCallsExcel) {
+  els.exportCallsExcel.addEventListener('click', () => exportCallsToExcel());
 }
 
 // Grid scale control
