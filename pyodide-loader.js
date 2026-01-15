@@ -41,7 +41,6 @@ export async function unpickleDataFrameToRecords(pklBytes) {
 
   const code = `
 import io
-import json
 import pickle
 
 import pandas as pd
@@ -89,17 +88,16 @@ columns = [str(c) for c in df.columns.tolist()]
 # orient='records' gives a list of dicts: [{col: value, ...}, ...]
 records_json = df.to_json(orient='records')
 
-result = {
-    "columns": columns,
-    "records": json.loads(records_json),
-}
-
-json.dumps(result)
+# Returning a Python dict lets Pyodide convert to JS without
+# creating a giant intermediate JSON string (reduces peak memory).
+{"columns": columns, "records": df.to_dict(orient='records')}
 `;
 
   try {
-    const jsonText = await pyodide.runPythonAsync(code);
-    return JSON.parse(jsonText);
+    const resultProxy = await pyodide.runPythonAsync(code);
+    const result = resultProxy.toJs({ create_proxies: false });
+    resultProxy.destroy();
+    return result;
   } finally {
     // Clean up globals to reduce memory pressure.
     pyodide.globals.delete('PKL_BYTES');
