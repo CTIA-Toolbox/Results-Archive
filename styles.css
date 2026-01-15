@@ -25,6 +25,21 @@ body {
 .small { font-size: 11px; }
 .hidden { display: none !important; }
 
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Hide the browser-provided filename text (e.g. "No file chosen"). We'll render our own status label. */
+input[type="file"] {
+  color: transparent;
+}
+
+input[type="file"]::file-selector-button {
+  color: inherit;
+}
+
 .grid-scroll {
   overflow: auto;
   max-width: 100%;

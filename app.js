@@ -4,6 +4,8 @@ import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 const els = {
   fileInput: document.getElementById('fileInput'),
   callFileInput: document.getElementById('callFileInput'),
+  fileInputStatus: document.getElementById('fileInputStatus'),
+  callFileInputStatus: document.getElementById('callFileInputStatus'),
   statusText: document.getElementById('statusText'),
   columnsPreview: document.getElementById('columnsPreview'),
   gridContainer: document.getElementById('gridContainer'),
@@ -20,6 +22,7 @@ const els = {
   callLocationSourceBtn: document.getElementById('callLocationSourceBtn'),
   callViewToggleBtn: document.getElementById('callViewToggleBtn'),
   exportCallsExcel: document.getElementById('exportCallsExcel'),
+  exportCallsKml: document.getElementById('exportCallsKml'),
   debugSection: document.getElementById('debugSection'),
   debugLog: document.getElementById('debugLog'),
   filtersContainer: document.getElementById('filtersContainer'),
@@ -33,6 +36,12 @@ const els = {
   applyBuildingText: document.getElementById('applyBuildingText'),
   clearBuildingText: document.getElementById('clearBuildingText'),
 };
+
+function setFileStatus(kind, text) {
+  const el = kind === 'call' ? els.callFileInputStatus : els.fileInputStatus;
+  if (!el) return;
+  el.textContent = text || 'No file chosen';
+}
 
 const state = {
   columns: [],
@@ -93,6 +102,17 @@ const callState = {
     path_id: null,
     point_id: null,
     location_source: null,
+
+    // KML/vector export columns
+    actual_lat: null,
+    actual_lon: null,
+    actual_geoid_alt: null,
+    actual_hae_alt: null,
+
+    location_lat: null,
+    location_lon: null,
+    location_geoid_alt: null,
+    location_hae_alt: null,
   },
 };
 
@@ -470,6 +490,21 @@ function setCallsExportEnabled(enabled) {
   els.exportCallsExcel.disabled = !enabled;
 }
 
+function setCallsKmlExportEnabled(enabled) {
+  if (!els.exportCallsKml) return;
+  els.exportCallsKml.disabled = !enabled;
+}
+
+function canExportCallsKml() {
+  if (!callState.records.length) return false;
+  if (!callState.filteredRecords.length) return false;
+  const c = callState.dimCols;
+  const hasActualLatLon = Boolean(c.actual_lat && c.actual_lon);
+  const hasActualAlt = Boolean(c.actual_geoid_alt || c.actual_hae_alt);
+  const hasLocationAlt = Boolean(c.location_geoid_alt || c.location_hae_alt);
+  return hasActualLatLon && hasActualAlt && hasLocationAlt;
+}
+
 function updateCallViewToggleButton() {
   const btn = els.callViewToggleBtn;
   if (!btn) return;
@@ -656,6 +691,223 @@ function exportCallsToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
+}
+
+function parseNumber(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function cdataSafe(s) {
+  return String(s ?? '').replaceAll(']]>', ']]&gt;');
+}
+
+function xmlEscape(s) {
+  return String(s ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function downloadTextFile({ filename, text, mime }) {
+  const blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function buildCallKmlFromRows({ rows, docName }) {
+  const c = callState.dimCols;
+
+  // Big KMLs can be slow in Google Earth.
+  const hardLimit = 50000;
+  if (rows.length > hardLimit) {
+    const ok = confirm(`You are exporting ${rows.length.toLocaleString()} call vectors. This may be very large/slow in Google Earth. Continue?`);
+    if (!ok) return null;
+  }
+
+  const STYLE_UP = 'lineUp';
+  const STYLE_DOWN = 'lineDown';
+
+  const pieces = [];
+  pieces.push('<?xml version="1.0" encoding="UTF-8"?>');
+  pieces.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
+  pieces.push('<Document>');
+  pieces.push(`<name>${xmlEscape(docName || `Call Vectors (${rows.length.toLocaleString()})`)}</name>`);
+
+  // ABGR colors: ff0000ff = red, ffff0000 = blue
+  pieces.push('<Style id="lineUp"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>');
+  pieces.push('<Style id="lineDown"><LineStyle><color>ffff0000</color><width>2</width></LineStyle></Style>');
+
+  const buildingCol = c.building;
+  const folderMap = new Map();
+  const getFolderKey = (r) => (buildingCol ? toKey(r?.[buildingCol]) : '');
+  const getFolder = (key) => {
+    if (!folderMap.has(key)) folderMap.set(key, []);
+    return folderMap.get(key);
+  };
+
+  for (const r of rows) {
+    const actualLat = parseNumber(r?.[c.actual_lat]);
+    const actualLon = parseNumber(r?.[c.actual_lon]);
+    if (actualLat === null || actualLon === null) continue;
+
+    const locLat = c.location_lat ? (parseNumber(r?.[c.location_lat]) ?? actualLat) : actualLat;
+    const locLon = c.location_lon ? (parseNumber(r?.[c.location_lon]) ?? actualLon) : actualLon;
+
+    const actualGeoid = c.actual_geoid_alt ? parseNumber(r?.[c.actual_geoid_alt]) : null;
+    const actualHae = c.actual_hae_alt ? parseNumber(r?.[c.actual_hae_alt]) : null;
+    const geoidSep = (actualGeoid !== null && actualHae !== null) ? (actualHae - actualGeoid) : null;
+
+    // Google Earth's "absolute" altitude behaves like meters above sea level (geoid-ish).
+    // Use surveyed Geoid Alt if present; otherwise convert from HAE using the surveyed separation.
+    const actualAlt = actualGeoid !== null ? actualGeoid : (actualHae !== null && geoidSep !== null ? (actualHae - geoidSep) : actualHae);
+
+    const locGeoid = c.location_geoid_alt ? parseNumber(r?.[c.location_geoid_alt]) : null;
+    const locHae = c.location_hae_alt ? parseNumber(r?.[c.location_hae_alt]) : null;
+    const locAlt = locGeoid !== null
+      ? locGeoid
+      : (locHae !== null && geoidSep !== null ? (locHae - geoidSep) : locHae);
+
+    if (actualAlt === null || locAlt === null) continue;
+
+    const delta = locAlt - actualAlt;
+    const styleUrl = delta >= 0 ? `#${STYLE_UP}` : `#${STYLE_DOWN}`;
+
+    const buildingVal = buildingCol ? toKey(r?.[buildingCol]) : '';
+    const stageVal = c.stage ? toKey(r?.[c.stage]) : '';
+    const participantVal = c.participant ? toKey(r?.[c.participant]) : '';
+    const pathVal = c.path_id ? toKey(r?.[c.path_id]) : '';
+    const pointVal = c.point_id ? toKey(r?.[c.point_id]) : '';
+
+    const nameBits = [];
+    if (buildingVal) nameBits.push(buildingVal);
+    if (stageVal) nameBits.push(stageVal);
+    if (pointVal) nameBits.push(pointVal);
+    const placemarkName = nameBits.length ? nameBits.join(' • ') : 'Call Vector';
+
+    const descLines = [];
+    if (buildingVal) descLines.push(`Building: ${buildingVal}`);
+    if (stageVal) descLines.push(`Stage: ${stageVal}`);
+    if (participantVal) descLines.push(`Participant: ${participantVal}`);
+    if (pathVal) descLines.push(`Path ID: ${pathVal}`);
+    if (pointVal) descLines.push(`Point ID: ${pointVal}`);
+    if (c.location_source) descLines.push(`Location Source: ${toKey(r?.[c.location_source])}`);
+    descLines.push(`Actual Alt (MSL): ${actualAlt}`);
+    descLines.push(`Location Alt (MSL): ${locAlt}`);
+    descLines.push(`Delta (Location-Actual): ${delta}`);
+    if (geoidSep !== null) descLines.push(`Geoid Sep (HAE-Geoid): ${geoidSep}`);
+
+    const coords = `${actualLon},${actualLat},${actualAlt} ${locLon},${locLat},${locAlt}`;
+
+    const pm = [];
+    pm.push('<Placemark>');
+    pm.push(`<name>${xmlEscape(placemarkName)}</name>`);
+    pm.push(`<styleUrl>${styleUrl}</styleUrl>`);
+    pm.push(`<description><![CDATA[${cdataSafe(descLines.join('<br/>'))}]]></description>`);
+    pm.push('<LineString>');
+    pm.push('<tessellate>0</tessellate>');
+    pm.push('<altitudeMode>absolute</altitudeMode>');
+    pm.push(`<coordinates>${coords}</coordinates>`);
+    pm.push('</LineString>');
+    pm.push('</Placemark>');
+
+    getFolder(getFolderKey(r)).push(pm.join(''));
+  }
+
+  for (const [folderKey, placemarks] of folderMap.entries()) {
+    pieces.push('<Folder>');
+    if (folderKey) pieces.push(`<name>${xmlEscape(folderKey)}</name>`);
+    pieces.push(...placemarks);
+    pieces.push('</Folder>');
+  }
+
+  pieces.push('</Document>');
+  pieces.push('</kml>');
+
+  return pieces.join('\n');
+}
+
+async function exportCallsToKml() {
+  if (!canExportCallsKml()) {
+    setStatus('KML export unavailable: missing required columns (Actual Lat/Lon + altitudes).', { error: true });
+    return;
+  }
+
+  // If we don't have surveyed geoid separation, exporting absolute altitudes from HAE may be offset.
+  const c = callState.dimCols;
+  const hasGeoidSeparation = Boolean(c.actual_geoid_alt && c.actual_hae_alt);
+  const willUseHaeForActual = Boolean(c.actual_hae_alt && !c.actual_geoid_alt);
+  const willUseHaeForLocation = Boolean(c.location_hae_alt && !c.location_geoid_alt);
+  if (!hasGeoidSeparation && (willUseHaeForActual || willUseHaeForLocation)) {
+    const ok = confirm('This call dataset does not appear to include both Actual Geoid Alt and Actual HAE Alt.\n\nThe KML will still export, but absolute altitudes may be offset because Google Earth expects MSL/Geoid-like heights.\n\nContinue?');
+    if (!ok) return;
+  }
+
+  const rows = callState.filteredRecords;
+  const participantCol = callState.dimCols.participant;
+
+  // If we can, split into one KML per participant.
+  if (participantCol) {
+    const byParticipant = new Map();
+    for (const r of rows) {
+      const p = toKey(r?.[participantCol]) || '(blank)';
+      if (!byParticipant.has(p)) byParticipant.set(p, []);
+      byParticipant.get(p).push(r);
+    }
+
+    const participants = Array.from(byParticipant.keys()).sort((a, b) => a.localeCompare(b));
+    if (participants.length > 30) {
+      const ok = confirm(`This will download ${participants.length.toLocaleString()} separate KML files (one per Participant). Continue?`);
+      if (!ok) return;
+    }
+
+    const dt = new Date();
+    const buildingPart = state.filters.building && state.filters.building.size
+      ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
+      : '';
+
+    let exported = 0;
+    for (const p of participants) {
+      const subset = byParticipant.get(p) || [];
+      const docName = `Call Vectors - ${p} (${subset.length.toLocaleString()})`;
+      const kml = buildCallKmlFromRows({ rows: subset, docName });
+      if (!kml) continue;
+
+      const filename = `Call_Vectors_${safeFilePart(p)}_${formatDateForFilename(dt)}${buildingPart}.kml`;
+      downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+      exported++;
+
+      // Avoid overwhelming the browser download UI.
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+
+    setStatus(`Exported ${exported.toLocaleString()} KML file(s) by Participant.`);
+    return;
+  }
+
+  // Fallback: single KML
+  const kml = buildCallKmlFromRows({ rows, docName: `Call Vectors (${rows.length.toLocaleString()})` });
+  if (!kml) return;
+  const dt = new Date();
+  const buildingPart = state.filters.building && state.filters.building.size
+    ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
+    : '';
+  const filename = `Call_Vectors_${formatDateForFilename(dt)}${buildingPart}.kml`;
+  downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+  setStatus(`Exported KML: ${filename}`);
 }
 
 function exportCurrentPivotToExcel() {
@@ -902,6 +1154,28 @@ function guessCallDimensionColumns(columns) {
     path_id: detectColumn(columns, ['path_id', 'path id', 'path', 'pathid']),
     point_id: detectColumn(columns, ['point_id', 'point id', 'point', 'pointid']),
     location_source: detectColumn(columns, ['location_source', 'location source', 'loc source', 'source']),
+
+    actual_lat: detectColumn(columns, ['actual lat', 'actual_lat', 'actual latitude', 'survey lat']),
+    actual_lon: detectColumn(columns, ['actual lon', 'actual_lon', 'actual longitude', 'survey lon']),
+    actual_geoid_alt: detectColumn(columns, ['actual geoid alt', 'actual geoid altitude', 'geoid alt', 'geoid_alt', 'geoid altitude']),
+    actual_hae_alt: detectColumn(columns, ['actual hae alt', 'actual hae altitude', 'hae alt', 'hae_alt', 'hae altitude']),
+
+    location_lat: detectColumn(columns, ['location lat', 'location latitude', 'loc lat', 'reported lat', 'estimated lat']),
+    location_lon: detectColumn(columns, ['location lon', 'location longitude', 'loc lon', 'reported lon', 'estimated lon']),
+    location_geoid_alt: detectColumn(columns, ['location geoid alt', 'location geoid altitude', 'loc geoid alt']),
+    // Your measured altitude column is typically just "Location Altitude" (assumed HAE).
+    location_hae_alt: detectColumn(columns, [
+      'location altitude (hae)',
+      'location alt (hae)',
+      'location hae alt',
+      'location altitude hae',
+      'location altitude',
+      'location_altitude',
+      'loc altitude',
+      'loc alt',
+      'loc hae alt',
+      'loc alt hae',
+    ]),
   };
 }
 
@@ -1144,6 +1418,9 @@ function applyFilters() {
     renderCallSummary();
     renderCallTable();
     setCallsExportEnabled(false);
+    setCallsKmlExportEnabled(false);
+    updateCallLocationSourceButton();
+    updateCallViewToggleButton();
     return;
   }
 
@@ -1195,6 +1472,8 @@ function applyFilters() {
   renderCallTable();
   setCallsExportEnabled(callState.filteredRecords.length > 0);
   updateCallLocationSourceButton();
+  setCallsKmlExportEnabled(canExportCallsKml());
+  updateCallViewToggleButton();
 }
 
 function clearAllFilters() {
@@ -1703,6 +1982,8 @@ async function onFileSelected(file) {
   setStatus('Reading file…');
   logDebug(`File selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes)`);
 
+  if (file?.name) setFileStatus('archive', file.name);
+
   try {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -1868,6 +2149,7 @@ async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, id
     renderCallSummary();
     renderCallTable();
     setCallsExportEnabled(callState.filteredRecords.length > 0);
+    setCallsKmlExportEnabled(canExportCallsKml());
     updateCallLocationSourceButton();
     updateCallViewToggleButton();
     updateSectionsVisibility();
@@ -1893,6 +2175,7 @@ async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, id
     enableControls(true);
     if (els.zoomSelect) els.zoomSelect.disabled = false;
     setCallsExportEnabled(callState.filteredRecords.length > 0);
+    setCallsKmlExportEnabled(canExportCallsKml());
     updateCallLocationSourceButton();
     updateCallViewToggleButton();
     updateSectionsVisibility();
@@ -1903,6 +2186,8 @@ async function onCallFileSelected(file) {
   if (!file) return;
   setStatus('Reading call data file…');
   logDebug(`Call file selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes)`);
+
+  if (file?.name) setFileStatus('call', file.name);
 
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -1922,6 +2207,10 @@ if (els.exportExcel) {
 
 if (els.exportCallsExcel) {
   els.exportCallsExcel.addEventListener('click', () => exportCallsToExcel());
+}
+
+if (els.exportCallsKml) {
+  els.exportCallsKml.addEventListener('click', () => exportCallsToKml());
 }
 
 if (els.callViewToggleBtn) {
@@ -2057,6 +2346,7 @@ async function tryAutoLoadSavedDataset() {
       return false;
     }
 
+    setFileStatus('archive', 'Loaded previous session');
     setStatus(`Auto-loading saved dataset: ${rec.meta.name} (starting Pyodide)…`);
     logDebug(`Auto-loading saved dataset: ${rec.meta.name}`);
 
@@ -2117,6 +2407,7 @@ async function tryAutoLoadSavedDataset() {
   } catch (e) {
     logDebug(`Auto-load failed: ${e?.message ?? String(e)}`);
     setStatus('Ready. Choose a .pkl file to begin.');
+    setFileStatus('archive', 'No file chosen');
     enableControls(true);
     updateSectionsVisibility();
     return false;
@@ -2128,6 +2419,7 @@ async function tryAutoLoadSavedCallDataset() {
     const rec = await idbGetPkl(IDB_KEY_CALL_PKL);
     if (!rec?.blob || !rec?.meta?.name) return false;
 
+    setFileStatus('call', 'Loaded previous session');
     setStatus(`Auto-loading saved call data: ${rec.meta.name} (starting Pyodide)…`);
     logDebug(`Auto-loading saved call data: ${rec.meta.name}`);
 
@@ -2146,6 +2438,7 @@ async function tryAutoLoadSavedCallDataset() {
     return true;
   } catch (e) {
     logDebug(`Auto-load (call data) failed: ${e?.message ?? String(e)}`);
+    setFileStatus('call', 'No file chosen');
     return false;
   }
 }
