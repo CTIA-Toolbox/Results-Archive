@@ -1482,7 +1482,7 @@ function pruneIdBySectionToSelectedSections() {
 
 function applyFilters() {
   const buildingCol = state.dimCols.building;
-  const requireBuildingSelection = Boolean(buildingCol);
+  const requireBuildingSelection = Boolean(state.dimCols.building) || Boolean(callState.dimCols.building);
   const selectedBuildings = state.filters.building;
 
   if (requireBuildingSelection && (!selectedBuildings || selectedBuildings.size === 0)) {
@@ -1547,6 +1547,24 @@ function applyFilters() {
   updateCallLocationSourceButton();
   setCallsKmlExportEnabled(canExportCallsKml());
   updateCallViewToggleButton();
+}
+
+function resetAfterBuildingClear() {
+  // Clear everything so the user can start fresh with a new Building selection.
+  for (const k of Object.keys(state.filters)) state.filters[k].clear();
+  state.idBySection.clear();
+  if (els.buildingText) els.buildingText.value = '';
+
+  // Hide call preview (visual reset) but keep preference storage as-is.
+  callUi.showPreview = false;
+  updateCallViewToggleButton();
+
+  applyFilters();
+  buildFiltersUI();
+  render();
+  updateSectionsVisibility();
+
+  setStatus('Building selection cleared. Select building(s) above to begin.');
 }
 
 function clearAllFilters() {
@@ -2209,12 +2227,9 @@ async function loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb = false, id
     populateBuildingSelectOptions();
     syncBuildingSelectFromState();
 
-    renderCallSummary();
-    renderCallTable();
-    setCallsExportEnabled(callState.filteredRecords.length > 0);
-    setCallsKmlExportEnabled(canExportCallsKml());
-    updateCallLocationSourceButton();
-    updateCallViewToggleButton();
+    // Apply current filters (and Building selection requirement) immediately.
+    applyFilters();
+    buildFiltersUI();
     updateSectionsVisibility();
 
     if (saveToIdb) {
@@ -2388,11 +2403,7 @@ if (els.selectAllBuildings && els.buildingSelect) {
 if (els.clearBuildings && els.buildingSelect) {
   els.clearBuildings.addEventListener('click', () => {
     for (const opt of els.buildingSelect.options) opt.selected = false;
-    state.filters.building.clear();
-    applyFilters();
-    buildFiltersUI();
-    render();
-    updateSectionsVisibility();
+    resetAfterBuildingClear();
   });
 }
 
