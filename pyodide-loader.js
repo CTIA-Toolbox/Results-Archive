@@ -108,6 +108,10 @@ records_json = df.to_json(orient='records')
       throw new Error('Unpickle conversion failed: missing columns/records arrays');
     }
 
+    // Pyodide also converts nested dicts (each record) into Maps.
+    // Normalize them so callers can use record[colName] everywhere.
+    result.records = result.records.map((r) => (r instanceof Map ? Object.fromEntries(r) : r));
+
     return result;
   } finally {
     // Clean up globals to reduce memory pressure.

@@ -1,4 +1,4 @@
-import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=32';
+import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=33';
 import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 
 const els = {
