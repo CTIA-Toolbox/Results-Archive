@@ -1168,11 +1168,22 @@ async function exportCallsToKml() {
   const rows = callState.filteredRecords;
   const participantCol = callState.dimCols.participant;
 
+  const buildingLabel = (() => {
+    const selected = state.filters.building;
+    if (!selected || selected.size === 0) return 'All Buildings';
+    const arr = Array.from(selected);
+    if (arr.length === 1) return arr[0];
+    const head = arr.slice(0, 3).join(', ');
+    return `${head}${arr.length > 3 ? ` +${arr.length - 3} more` : ''}`;
+  })();
+
   // Export a single combined KML. If Participant is present, group into toggleable folders.
   const grouped = Boolean(participantCol);
   const kml = buildCallKmlFromRows({
     rows,
-    docName: grouped ? `Call Vectors (by Participant) (${rows.length.toLocaleString()})` : `Call Vectors (${rows.length.toLocaleString()})`,
+    docName: grouped
+      ? `Call Vectors (by Participant) — ${buildingLabel} (${rows.length.toLocaleString()})`
+      : `Call Vectors — ${buildingLabel} (${rows.length.toLocaleString()})`,
     groupByParticipant: grouped,
   });
   if (!kml) return;
@@ -1683,8 +1694,8 @@ function parseCommaList(text) {
 }
 
 function applyBuildingTextFilter() {
-  const buildingCol = state.dimCols.building;
-  if (!buildingCol) return;
+  const hasBuilding = Boolean(state.dimCols.building) || Boolean(callState.dimCols?.building);
+  if (!hasBuilding) return;
   if (!els.buildingText) return;
 
   const raw = els.buildingText.value;
@@ -1713,6 +1724,8 @@ function applyBuildingTextFilter() {
   applyFilters();
   buildFiltersUI();
   render();
+  updateSectionsVisibility();
+  setStatus(state.filters.building.size ? 'Building selection applied.' : 'Select building(s) above to begin.');
 }
 
 function clearBuildingTextFilter() {
@@ -1722,6 +1735,8 @@ function clearBuildingTextFilter() {
   applyFilters();
   buildFiltersUI();
   render();
+  updateSectionsVisibility();
+  setStatus('Building selection cleared. Select building(s) above to begin.');
 }
 
 function getRowHeaderCols() {
