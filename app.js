@@ -2413,14 +2413,27 @@ if (els.buildingText) {
 
 // Header building selection events
 if (els.buildingSelect) {
-  els.buildingSelect.addEventListener('change', () => {
+  const applyBuildingSelectFilter = () => {
     state.filters.building.clear();
     for (const opt of els.buildingSelect.selectedOptions) state.filters.building.add(opt.value);
+
+    // Keep the text box in sync so users can copy/paste selections.
+    if (els.buildingText) {
+      els.buildingText.value = Array.from(state.filters.building).join(', ');
+    }
+
+    logDebug(`Building selection changed: ${state.filters.building.size}`);
+    setStatus(state.filters.building.size ? 'Building selection applied.' : 'Select building(s) above to begin.');
+
     applyFilters();
     buildFiltersUI();
     render();
     updateSectionsVisibility();
-  });
+  };
+
+  // Multi-select UX varies by browser; `input` fires more reliably than `change` in some cases.
+  els.buildingSelect.addEventListener('change', applyBuildingSelectFilter);
+  els.buildingSelect.addEventListener('input', applyBuildingSelectFilter);
 }
 if (els.selectAllBuildings && els.buildingSelect) {
   els.selectAllBuildings.addEventListener('click', () => {
