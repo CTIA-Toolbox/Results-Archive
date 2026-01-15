@@ -527,7 +527,10 @@ function updateCallViewToggleButton() {
   const btn = els.callViewToggleBtn;
   if (!btn) return;
 
-  const canShow = Boolean(callState.records.length);
+  const needsBuilding = Boolean(state.dimCols.building) || Boolean(callState.dimCols.building);
+  const hasSelectedBuilding = Boolean(state.filters.building && state.filters.building.size > 0);
+
+  const canShow = Boolean(callState.records.length) && (!needsBuilding || hasSelectedBuilding);
   btn.disabled = !canShow;
 
   if (!canShow) {
@@ -752,7 +755,7 @@ function downloadTextFile({ filename, text, mime }) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function buildCallKmlFromRows({ rows, docName }) {
+function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
   const c = callState.dimCols;
 
   // Big KMLs can be slow in Google Earth.
@@ -776,11 +779,49 @@ function buildCallKmlFromRows({ rows, docName }) {
   pieces.push('<Style id="lineDown"><LineStyle><color>ffff0000</color><width>2</width></LineStyle></Style>');
 
   const buildingCol = c.building;
-  const folderMap = new Map();
-  const getFolderKey = (r) => (buildingCol ? toKey(r?.[buildingCol]) : '');
-  const getFolder = (key) => {
-    if (!folderMap.has(key)) folderMap.set(key, []);
-    return folderMap.get(key);
+  const participantCol = c.participant;
+
+  const makeNode = () => ({ count: 0, items: [], children: new Map() });
+  const root = makeNode();
+
+  const getOrCreateChild = (node, name) => {
+    const key = toKey(name);
+    if (!node.children.has(key)) node.children.set(key, makeNode());
+    return node.children.get(key);
+  };
+
+  const addPlacemark = (r, placemarkXml) => {
+    root.count++;
+
+    // Grouping strategy:
+    // - Default: by Building (previous behavior)
+    // - If groupByParticipant: Participant -> Building (if available)
+    if (groupByParticipant && participantCol) {
+      const p = toKey(r?.[participantCol]) || '(blank)';
+      const pNode = getOrCreateChild(root, p);
+      pNode.count++;
+
+      if (buildingCol) {
+        const b = toKey(r?.[buildingCol]) || '(blank)';
+        const bNode = getOrCreateChild(pNode, b);
+        bNode.count++;
+        bNode.items.push(placemarkXml);
+        return;
+      }
+
+      pNode.items.push(placemarkXml);
+      return;
+    }
+
+    if (buildingCol) {
+      const b = toKey(r?.[buildingCol]) || '(blank)';
+      const bNode = getOrCreateChild(root, b);
+      bNode.count++;
+      bNode.items.push(placemarkXml);
+      return;
+    }
+
+    root.items.push(placemarkXml);
   };
 
   for (const r of rows) {
@@ -848,14 +889,27 @@ function buildCallKmlFromRows({ rows, docName }) {
     pm.push('</LineString>');
     pm.push('</Placemark>');
 
-    getFolder(getFolderKey(r)).push(pm.join(''));
+    addPlacemark(r, pm.join(''));
   }
 
-  for (const [folderKey, placemarks] of folderMap.entries()) {
+  const emitNode = (name, node) => {
     pieces.push('<Folder>');
-    if (folderKey) pieces.push(`<name>${xmlEscape(folderKey)}</name>`);
-    pieces.push(...placemarks);
+    pieces.push(`<name>${xmlEscape(`${name} (${node.count.toLocaleString()})`)}</name>`);
+    pieces.push('<open>0</open>');
+    pieces.push(...node.items);
+    const childNames = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
+    for (const childName of childNames) {
+      emitNode(childName, node.children.get(childName));
+    }
     pieces.push('</Folder>');
+  };
+
+  // Root-level placemarks (only when no grouping columns exist).
+  pieces.push(...root.items);
+
+  const topNames = Array.from(root.children.keys()).sort((a, b) => a.localeCompare(b));
+  for (const n of topNames) {
+    emitNode(n, root.children.get(n));
   }
 
   pieces.push('</Document>');
@@ -883,54 +937,19 @@ async function exportCallsToKml() {
   const rows = callState.filteredRecords;
   const participantCol = callState.dimCols.participant;
 
-  // If we can, split into one KML per participant.
-  if (participantCol) {
-    const byParticipant = new Map();
-    for (const r of rows) {
-      const p = toKey(r?.[participantCol]) || '(blank)';
-      if (!byParticipant.has(p)) byParticipant.set(p, []);
-      byParticipant.get(p).push(r);
-    }
-
-    const participants = Array.from(byParticipant.keys()).sort((a, b) => a.localeCompare(b));
-    if (participants.length > 30) {
-      const ok = confirm(`This will download ${participants.length.toLocaleString()} separate KML files (one per Participant). Continue?`);
-      if (!ok) return;
-    }
-
-    const dt = new Date();
-    const buildingPart = state.filters.building && state.filters.building.size
-      ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
-      : '';
-
-    let exported = 0;
-    for (const p of participants) {
-      const subset = byParticipant.get(p) || [];
-      const docName = `Call Vectors - ${p} (${subset.length.toLocaleString()})`;
-      const kml = buildCallKmlFromRows({ rows: subset, docName });
-      if (!kml) continue;
-
-      const filename = `Call_Vectors_${safeFilePart(p)}_${formatDateForFilename(dt)}${buildingPart}.kml`;
-      downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
-      exported++;
-
-      // Avoid overwhelming the browser download UI.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    }
-
-    setStatus(`Exported ${exported.toLocaleString()} KML file(s) by Participant.`);
-    return;
-  }
-
-  // Fallback: single KML
-  const kml = buildCallKmlFromRows({ rows, docName: `Call Vectors (${rows.length.toLocaleString()})` });
+  // Export a single combined KML. If Participant is present, group into toggleable folders.
+  const grouped = Boolean(participantCol);
+  const kml = buildCallKmlFromRows({
+    rows,
+    docName: grouped ? `Call Vectors (by Participant) (${rows.length.toLocaleString()})` : `Call Vectors (${rows.length.toLocaleString()})`,
+    groupByParticipant: grouped,
+  });
   if (!kml) return;
   const dt = new Date();
   const buildingPart = state.filters.building && state.filters.building.size
     ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
     : '';
-  const filename = `Call_Vectors_${formatDateForFilename(dt)}${buildingPart}.kml`;
+  const filename = `Call_Vectors_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}${buildingPart}.kml`;
   downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
   setStatus(`Exported KML: ${filename}`);
 }
@@ -2146,6 +2165,13 @@ async function onFileSelected(file) {
 function renderCallTable({ maxRows = 200 } = {}) {
   if (!els.callTableContainer) return;
 
+  const needsBuilding = Boolean(state.dimCols.building) || Boolean(callState.dimCols.building);
+  const hasSelectedBuilding = Boolean(state.filters.building && state.filters.building.size > 0);
+  if (needsBuilding && !hasSelectedBuilding) {
+    els.callTableContainer.innerHTML = '<div class="placeholder">Select one or more buildings to view call data.</div>';
+    return;
+  }
+
   const rows = callState.filteredRecords?.length ? callState.filteredRecords : callState.records;
   if (!rows || rows.length === 0) {
     els.callTableContainer.innerHTML = '<div class="placeholder">No call rows to display.</div>';
@@ -2194,6 +2220,13 @@ function renderCallSummary() {
   if (!els.callSummary) return;
   if (!callState.records.length) {
     els.callSummary.textContent = 'No call data loaded.';
+    return;
+  }
+
+  const needsBuilding = Boolean(state.dimCols.building) || Boolean(callState.dimCols.building);
+  const hasSelectedBuilding = Boolean(state.filters.building && state.filters.building.size > 0);
+  if (needsBuilding && !hasSelectedBuilding) {
+    els.callSummary.textContent = 'Call data loaded. Select building(s) to view.';
     return;
   }
 
