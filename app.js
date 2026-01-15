@@ -615,6 +615,199 @@ function buildFiltersSummaryAoA() {
   return lines;
 }
 
+function buildBuildingHealthAoA() {
+  const lines = [];
+  lines.push(['Building Health Check']);
+  lines.push(['Exported at', new Date().toLocaleString()]);
+  lines.push(['Build', document.getElementById('buildStamp')?.textContent ?? '']);
+  lines.push([]);
+
+  const buildingCol = state.dimCols.building;
+  const stageCol = state.dimCols.stage;
+  const rowTypeCol = state.dimCols.row_type;
+  const hCol = state.metricCols?.h80;
+  const vCol = state.metricCols?.v80;
+
+  const toNum = (v) => {
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  if (!buildingCol) {
+    lines.push(['Missing Building column; cannot compute building health.']);
+    return lines;
+  }
+  if (!stageCol) {
+    lines.push(['Missing Stage column; cannot compute per-stage health.']);
+    return lines;
+  }
+  if (!hCol && !vCol) {
+    lines.push(['Missing metric columns (Horizontal/Vertical 80%); nothing to summarize.']);
+    return lines;
+  }
+
+  const all = state.filteredRecords?.length ? state.filteredRecords : [];
+  if (!all.length) {
+    lines.push(['No filtered rows available. Select a building and ensure results are visible, then export again.']);
+    return lines;
+  }
+
+  // If the dataset has a Section/Row Type column and includes a "point" section,
+  // prefer using only point rows for health/bias (typically the most actionable level).
+  let rows = all;
+  if (rowTypeCol) {
+    const pointRows = all.filter((r) => String(r?.[rowTypeCol] ?? '').toLowerCase() === 'point');
+    if (pointRows.length) {
+      rows = pointRows;
+      lines.push(['Source rows', `Section=${rowTypeCol}=point (${rows.length.toLocaleString()} rows)`]);
+    } else {
+      lines.push(['Source rows', `All sections (${rows.length.toLocaleString()} rows)`]);
+    }
+  } else {
+    lines.push(['Source rows', `All rows (${rows.length.toLocaleString()} rows)`]);
+  }
+  lines.push([]);
+
+  const makeAgg = () => ({
+    rows: 0,
+    hN: 0,
+    hSum: 0,
+    hAbsSum: 0,
+    hPos: 0,
+    hNeg: 0,
+    hZero: 0,
+    vN: 0,
+    vSum: 0,
+    vAbsSum: 0,
+    vPos: 0,
+    vNeg: 0,
+    vZero: 0,
+  });
+
+  const byBuildingStage = new Map();
+  const byBuilding = new Map();
+
+  const bumpAgg = (agg, hVal, vVal) => {
+    agg.rows++;
+
+    if (hVal !== null) {
+      agg.hN++;
+      agg.hSum += hVal;
+      agg.hAbsSum += Math.abs(hVal);
+      if (hVal > 0) agg.hPos++;
+      else if (hVal < 0) agg.hNeg++;
+      else agg.hZero++;
+    }
+
+    if (vVal !== null) {
+      agg.vN++;
+      agg.vSum += vVal;
+      agg.vAbsSum += Math.abs(vVal);
+      if (vVal > 0) agg.vPos++;
+      else if (vVal < 0) agg.vNeg++;
+      else agg.vZero++;
+    }
+  };
+
+  for (const r of rows) {
+    const b = toKey(r?.[buildingCol]) || '(blank)';
+    const s = toKey(r?.[stageCol]) || '(blank)';
+
+    const hVal = hCol ? toNum(r?.[hCol]) : null;
+    const vVal = vCol ? toNum(r?.[vCol]) : null;
+
+    const key = `${b}\u0000${s}`;
+    if (!byBuildingStage.has(key)) byBuildingStage.set(key, { building: b, stage: s, agg: makeAgg() });
+    bumpAgg(byBuildingStage.get(key).agg, hVal, vVal);
+
+    if (!byBuilding.has(b)) byBuilding.set(b, makeAgg());
+    bumpAgg(byBuilding.get(b), hVal, vVal);
+  }
+
+  const biasLabel = (bias) => {
+    if (!Number.isFinite(bias)) return '';
+    const a = Math.abs(bias);
+    const strength = a >= 0.6 ? 'Strong' : a >= 0.3 ? 'Moderate' : a >= 0.15 ? 'Slight' : 'Mixed';
+    if (strength === 'Mixed') return 'Mixed';
+    return bias > 0 ? `${strength} +` : `${strength} -`;
+  };
+
+  const fmtPct = (num) => (Number.isFinite(num) ? num : '');
+
+  const header = [
+    'Building',
+    'Stage',
+    'Rows',
+    'H80 N',
+    'H80 Mean',
+    'H80 MeanAbs',
+    'H80 Pos%',
+    'H80 Neg%',
+    'H80 Bias',
+    'H80 Bias Label',
+    'V80 N',
+    'V80 Mean',
+    'V80 MeanAbs',
+    'V80 Pos%',
+    'V80 Neg%',
+    'V80 Bias',
+    'V80 Bias Label',
+  ];
+  lines.push(header);
+
+  const entries = Array.from(byBuildingStage.values()).sort((a, b) => {
+    const bc = a.building.localeCompare(b.building);
+    if (bc) return bc;
+    return a.stage.localeCompare(b.stage);
+  });
+
+  const emitAggRow = (building, stage, agg) => {
+    const hMean = agg.hN ? agg.hSum / agg.hN : null;
+    const hAbsMean = agg.hN ? agg.hAbsSum / agg.hN : null;
+    const hPosPct = agg.hN ? agg.hPos / agg.hN : null;
+    const hNegPct = agg.hN ? agg.hNeg / agg.hN : null;
+    const hBiasDen = agg.hPos + agg.hNeg;
+    const hBias = hBiasDen ? (agg.hPos - agg.hNeg) / hBiasDen : null;
+
+    const vMean = agg.vN ? agg.vSum / agg.vN : null;
+    const vAbsMean = agg.vN ? agg.vAbsSum / agg.vN : null;
+    const vPosPct = agg.vN ? agg.vPos / agg.vN : null;
+    const vNegPct = agg.vN ? agg.vNeg / agg.vN : null;
+    const vBiasDen = agg.vPos + agg.vNeg;
+    const vBias = vBiasDen ? (agg.vPos - agg.vNeg) / vBiasDen : null;
+
+    lines.push([
+      building,
+      stage,
+      agg.rows,
+      agg.hN,
+      hMean ?? '',
+      hAbsMean ?? '',
+      fmtPct(hPosPct),
+      fmtPct(hNegPct),
+      hBias ?? '',
+      biasLabel(hBias ?? NaN),
+      agg.vN,
+      vMean ?? '',
+      vAbsMean ?? '',
+      fmtPct(vPosPct),
+      fmtPct(vNegPct),
+      vBias ?? '',
+      biasLabel(vBias ?? NaN),
+    ]);
+  };
+
+  for (const e of entries) emitAggRow(e.building, e.stage, e.agg);
+
+  lines.push([]);
+  lines.push(['Building Totals']);
+  lines.push(header);
+  const buildingNames = Array.from(byBuilding.keys()).sort((a, b) => a.localeCompare(b));
+  for (const b of buildingNames) emitAggRow(b, '(All)', byBuilding.get(b));
+
+  return lines;
+}
+
 function buildCallFiltersSummaryAoA() {
   const lines = [];
   const setToText = (set) => {
@@ -765,8 +958,20 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     if (!ok) return null;
   }
 
-  const STYLE_UP = 'lineUp';
-  const STYLE_DOWN = 'lineDown';
+  const STYLE_OK = 'lineOk';
+  const STYLE_BAD = 'lineBad';
+  const OK_VERT_M = 5;
+  const OK_HORIZ_M = 50;
+
+  const haversineMeters = (lat1, lon1, lat2, lon2) => {
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const R = 6371000;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * cVal;
+  };
 
   const pieces = [];
   pieces.push('<?xml version="1.0" encoding="UTF-8"?>');
@@ -774,9 +979,9 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
   pieces.push('<Document>');
   pieces.push(`<name>${xmlEscape(docName || `Call Vectors (${rows.length.toLocaleString()})`)}</name>`);
 
-  // ABGR colors: ff0000ff = red, ffff0000 = blue
-  pieces.push('<Style id="lineUp"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>');
-  pieces.push('<Style id="lineDown"><LineStyle><color>ffff0000</color><width>2</width></LineStyle></Style>');
+  // ABGR colors: ff00ff00 = green, ff0000ff = red
+  pieces.push('<Style id="lineOk"><LineStyle><color>ff00ff00</color><width>2</width></LineStyle></Style>');
+  pieces.push('<Style id="lineBad"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>');
 
   const buildingCol = c.building;
   const participantCol = c.participant;
@@ -849,7 +1054,10 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     if (actualAlt === null || locAlt === null) continue;
 
     const delta = locAlt - actualAlt;
-    const styleUrl = delta >= 0 ? `#${STYLE_UP}` : `#${STYLE_DOWN}`;
+    const horizM = haversineMeters(actualLat, actualLon, locLat, locLon);
+    const vertM = Math.abs(delta);
+    const isOk = (vertM < OK_VERT_M) && (horizM < OK_HORIZ_M);
+    const styleUrl = isOk ? `#${STYLE_OK}` : `#${STYLE_BAD}`;
 
     const buildingVal = buildingCol ? toKey(r?.[buildingCol]) : '';
     const stageVal = c.stage ? toKey(r?.[c.stage]) : '';
@@ -873,6 +1081,9 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     descLines.push(`Actual Alt (MSL): ${actualAlt}`);
     descLines.push(`Location Alt (MSL): ${locAlt}`);
     descLines.push(`Delta (Location-Actual): ${delta}`);
+    descLines.push(`Horizontal distance: ${Number.isFinite(horizM) ? horizM.toFixed(2) : ''} m`);
+    descLines.push(`Vertical distance: ${Number.isFinite(vertM) ? vertM.toFixed(2) : ''} m`);
+    descLines.push(`Pass (H<${OK_HORIZ_M}m & V<${OK_VERT_M}m): ${isOk ? 'YES' : 'NO'}`);
     if (geoidSep !== null) descLines.push(`Geoid Sep (HAE-Geoid): ${geoidSep}`);
 
     const coords = `${actualLon},${actualLat},${actualAlt} ${locLon},${locLat},${locAlt}`;
@@ -1157,6 +1368,29 @@ function exportCurrentPivotToExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Stage Comparison');
 
+  // Building health check sheet
+  const wsHealth = XLSX.utils.aoa_to_sheet(buildBuildingHealthAoA());
+  wsHealth['!cols'] = [
+    { wch: 18 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 8 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 8 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsHealth, 'Building Health');
+
   // Filters/metadata sheet
   const ws2 = XLSX.utils.aoa_to_sheet(buildFiltersSummaryAoA());
   ws2['!cols'] = [{ wch: 24 }, { wch: 120 }];
@@ -1361,7 +1595,7 @@ function updateSectionsVisibility() {
   const needsBuildingAny = needsBuildingArchive || needsBuildingCalls;
   const hasSelectedBuilding = state.filters.building && state.filters.building.size > 0;
   const showFilters = hasAnyData && (!needsBuildingAny || hasSelectedBuilding);
-  const showGrid = hasArchive && (!needsBuildingArchive || hasSelectedBuilding);
+  const showGrid = hasArchive;
   const showCalls = hasCalls && (!needsBuildingCalls || hasSelectedBuilding);
   const showDebug = hasAnyData;
 
