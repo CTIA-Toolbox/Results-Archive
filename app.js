@@ -1,6 +1,8 @@
 // Ensure all imports use correct relative paths
+console.log('REACHED 1: TOP OF FILE');
 import { unpickleDataFrameToRecords } from './pyodide-loader.js';
 import { buildPivot, renderPivotGrid } from './pivot.js';
+console.log('REACHED 2: AFTER IMPORTS');
 // --- Egnyte Modal Integration ---
 const egnyteLinks = [
   { Link: 'https://furtherllc.egnyte.com/fl/xBTGxYRC8MMK', Stage: '24A', Participant: 'AT&T' },
@@ -106,8 +108,11 @@ window.addEventListener('DOMContentLoaded', () => {
   attachEgnyteBtnListener();
 });
 
+console.log('REACHED 3: AFTER_EGNYTE_LISTENER_SETUP');
 
 
+
+console.log('REACHED 4: BEFORE_ELS_BLOCK');
 const els = {
   fileInput: document.getElementById('fileInput'),
   callFileInput: document.getElementById('callFileInput'),
@@ -141,6 +146,7 @@ const els = {
   applyBuildingText: document.getElementById('applyBuildingText'),
   clearBuildingText: document.getElementById('clearBuildingText'),
 };
+console.log('REACHED 5: AFTER_ELS_BLOCK');
 
 const state = {
   columns: [],
@@ -289,6 +295,7 @@ function formatBytes(n) {
   return `${v.toFixed(digits)} ${units[i]}`;
 }
 
+console.log('REACHED 6: BEFORE_INDEXEDDB_FUNCTIONS');
 function openIdb() {
   return new Promise((resolve, reject) => {
     if (!('indexedDB' in window)) {
@@ -523,6 +530,7 @@ setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
 logDebug('app.js initialized.');
 
 // No previous-session restore: clear any legacy saved blobs and hide the info rows.
+console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
 (async () => {
   try {
     if (els.lastDatasetInfo) els.lastDatasetInfo.textContent = '';
@@ -2501,6 +2509,8 @@ async function onFileSelected(file) {
 
     setStatus('Loading Pyodide + pandas (first load can take a bit)…');
     logDebug('[onFileSelected] Ensuring Pyodide is available…');
+    console.log('REACHED 9: BEFORE_ensurePyodideAvailable_call (block ~2500)');
+    console.log('REACHED 10: BEFORE_ensurePyodideAvailable_call (block ~2650)');
     await ensurePyodideAvailable();
     logDebug('[onFileSelected] Starting Pyodide unpickle…');
 
@@ -2901,6 +2911,7 @@ function attachFileInputListeners() {
 }
 
 // Try to attach immediately, and also on DOMContentLoaded in case elements were not ready
+console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
 attachFileInputListeners();
 window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
 
