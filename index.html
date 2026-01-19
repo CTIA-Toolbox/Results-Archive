@@ -19,8 +19,19 @@
 <body>
   <header class="app-header">
     <div class="app-title">
-      <h1>Results Archive</h1>
+      <h1>Results Archive <span id="dev-version" style="font-size:0.7em;color:#1976d2;background:#fff;padding:0.2em 0.7em;border-radius:4px;border:1px solid #1976d2;box-shadow:0 1px 4px #0001;vertical-align:middle;">dev 76</span></h1>
     </div>
+    <div style="margin-top:0.5em;">
+      <button id="egnyteBtn" class="btn btn-small" type="button">Go to Egnyte</button>
+    </div>
+  <!-- Egnyte Modal -->
+  <div id="egnyteModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:#0008;">
+    <div style="background:#fff;max-width:400px;margin:8vh auto;padding:2em 1.5em 1.5em 1.5em;border-radius:8px;box-shadow:0 2px 16px #0003;position:relative;">
+      <button id="egnyteModalClose" style="position:absolute;top:0.5em;right:0.5em;font-size:1.2em;">&times;</button>
+      <h2 style="margin-top:0">Egnyte Folder Access</h2>
+      <div id="egnyteModalContent">Loading…</div>
+    </div>
+  </div>
 
     <div class="app-controls">
       <label class="file">

@@ -1,3 +1,65 @@
+// --- Egnyte Modal Integration ---
+const egnyteLinks = [
+  { Link: 'https://furtherllc.egnyte.com/fl/xBTGxYRC8MMK', Stage: '24A', Participant: 'AT&T' },
+  { Link: 'https://furtherllc.egnyte.com/fl/3pFVcB6Tby9J', Stage: '24A', Participant: 'Verizon' },
+  { Link: 'https://furtherllc.egnyte.com/fl/WPFvdQY7hDPd', Stage: '24A', Participant: 'T-Mobile' },
+  { Link: 'https://furtherllc.egnyte.com/fl/vKWqrm3RbYw', Stage: '25A', Participant: 'Google' },
+  { Link: 'https://furtherllc.egnyte.com/fl/d3BHPpQc4G9', Stage: '25A', Participant: 'Verizon' },
+  { Link: 'https://furtherllc.egnyte.com/fl/QDm7bk7JdFYT', Stage: '25A', Participant: 'AT&T' },
+  { Link: 'https://furtherllc.egnyte.com/fl/C7bQwhTwXQ9Y', Stage: '25A', Participant: 'T-Mobile' },
+  { Link: 'https://furtherllc.egnyte.com/fl/bFh8rw6CrWXD', Stage: '25B', Participant: 'T-Mobile' },
+  { Link: 'https://furtherllc.egnyte.com/fl/6hV9rF3fHMwX', Stage: '25B', Participant: 'Google' },
+  { Link: 'https://furtherllc.egnyte.com/fl/Rx7hYfMB6g4', Stage: '25B', Participant: 'AT&T' },
+  { Link: 'https://furtherllc.egnyte.com/fl/KK66cQybRxCH', Stage: '25B', Participant: 'Verizon' },
+  { Link: 'https://furtherllc.egnyte.com/fl/6Jv73VkMxpQ', Stage: '25C', Participant: 'Google' },
+  { Link: 'https://furtherllc.egnyte.com/fl/3DBJhfq6g7Jy', Stage: '25C', Participant: 'Verizon' },
+  { Link: 'https://furtherllc.egnyte.com/fl/X663ktHMp3WM', Stage: '25C', Participant: 'T-Mobile' },
+  { Link: 'https://furtherllc.egnyte.com/fl/Kwq76t6tGxQX', Stage: '25C', Participant: 'AT&T' },
+];
+
+function getSelectedEgnyteLinks() {
+  // Get selected stage(s) and participant(s) from state.filters
+  const stages = Array.from(state.filters.stage);
+  const participants = Array.from(state.filters.participant);
+  // If nothing selected, show all
+  if (stages.length === 0 && participants.length === 0) return egnyteLinks;
+  return egnyteLinks.filter(l =>
+    (stages.length === 0 || stages.includes(l.Stage)) &&
+    (participants.length === 0 || participants.includes(l.Participant))
+  );
+}
+
+function showEgnyteModal() {
+  const modal = document.getElementById('egnyteModal');
+  const content = document.getElementById('egnyteModalContent');
+  modal.style.display = 'block';
+  const links = getSelectedEgnyteLinks();
+  if (!links.length) {
+    content.innerHTML = '<div style="margin:1em 0;">No Egnyte folder links for current selection.</div>';
+    return;
+  }
+  content.innerHTML = links.map(l =>
+    `<div style="margin:1em 0;">
+      <b>Stage:</b> ${l.Stage} &nbsp; <b>Participant:</b> ${l.Participant}<br>
+      <button onclick="window.open('${l.Link}','_blank')">Open Folder</button>
+      <a href="${l.Link}" target="_blank" style="margin-left:0.7em;font-size:0.95em;">${l.Link}</a>
+    </div>`
+  ).join('');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const egnyteBtn = document.getElementById('egnyteBtn');
+  const egnyteModal = document.getElementById('egnyteModal');
+  const egnyteModalClose = document.getElementById('egnyteModalClose');
+  if (egnyteBtn) egnyteBtn.addEventListener('click', showEgnyteModal);
+  if (egnyteModalClose) egnyteModalClose.addEventListener('click', () => {
+    egnyteModal.style.display = 'none';
+  });
+  // Close modal on background click
+  if (egnyteModal) egnyteModal.addEventListener('click', e => {
+    if (e.target === egnyteModal) egnyteModal.style.display = 'none';
+  });
+});
 import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=33';
 import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 
