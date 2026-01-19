@@ -2858,43 +2858,50 @@ if (els.clearBuildings && els.buildingSelect) {
 
 
 
-// File input events
-if (!els.fileInput) {
-  setStatus('App initialization failed: file input not found in DOM.', { error: true });
-  logDebug('Fatal: #fileInput not found.');
-} else {
-  // Confirm listener attachment
-  console.log('[app] attaching fileInput listeners, element=', els.fileInput);
-  if (els.fileInput) {
-    els.fileInput.addEventListener('click', () => {
-      console.log('[app] fileInput clicked');
-      if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput clicked`;
-      try { els.fileInput.value = ''; } catch (e) { console.warn(e); }
-    });
-
-    const fileChangeHandler = (ev) => {
-      try {
-        console.log('[app] fileInput change/input event fired', ev);
-        if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput change/input event fired`;
-        const file = els.fileInput.files?.[0];
-        if (!file) {
-          console.log('[app] No file selected in fileInput change event.');
-          if (els.debugLog) els.debugLog.textContent += `\n[app] No file selected in fileInput change event.`;
-          return;
-        }
-        console.log('[app] file selected:', file.name, file.size, file.type);
-        if (els.debugLog) els.debugLog.textContent += `\n[app] file selected: ${file.name} (${file.size} bytes)`;
-        onFileSelected(file);
-      } catch (err) {
-        console.error('[app] error in fileChangeHandler', err);
-        if (els.debugLog) els.debugLog.textContent += `\n[app] error in fileChangeHandler: ${err?.message ?? err}`;
-      }
-    };
-
-    els.fileInput.addEventListener('change', fileChangeHandler);
-    els.fileInput.addEventListener('input', fileChangeHandler);
+// File input events — attach in a function and call on DOMContentLoaded as well
+function attachFileInputListeners() {
+  if (!els.fileInput) {
+    setStatus('App initialization: file input not found in DOM yet. Will retry on DOMContentLoaded.');
+    logDebug('Notice: #fileInput not found yet; delaying listener attachment.');
+    return;
   }
+
+  console.log('[app] attaching fileInput listeners, element=', els.fileInput);
+  if (els.fileInput.__listenersAttached) return;
+
+  els.fileInput.addEventListener('click', () => {
+    console.log('[app] fileInput clicked');
+    if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput clicked`;
+    try { els.fileInput.value = ''; } catch (e) { console.warn(e); }
+  });
+
+  const fileChangeHandler = (ev) => {
+    try {
+      console.log('[app] fileInput change/input event fired', ev);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput change/input event fired`;
+      const file = els.fileInput.files?.[0];
+      if (!file) {
+        console.log('[app] No file selected in fileInput change event.');
+        if (els.debugLog) els.debugLog.textContent += `\n[app] No file selected in fileInput change event.`;
+        return;
+      }
+      console.log('[app] file selected:', file.name, file.size, file.type);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] file selected: ${file.name} (${file.size} bytes)`;
+      onFileSelected(file);
+    } catch (err) {
+      console.error('[app] error in fileChangeHandler', err);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] error in fileChangeHandler: ${err?.message ?? err}`;
+    }
+  };
+
+  els.fileInput.addEventListener('change', fileChangeHandler);
+  els.fileInput.addEventListener('input', fileChangeHandler);
+  els.fileInput.__listenersAttached = true;
 }
+
+// Try to attach immediately, and also on DOMContentLoaded in case elements were not ready
+attachFileInputListeners();
+window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
 
 // Call-data file input events
 if (els.callFileInput) {
