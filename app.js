@@ -39,9 +39,9 @@ function showEgnyteModal() {
     return;
   }
   content.innerHTML = links.map(l =>
-    `<div style="margin:1em 0;">
-      <b>Stage:</b> ${l.Stage} &nbsp; <b>Participant:</b> ${l.Participant}<br>
-      <button class="btn btn-small" onclick="window.open('${l.Link}','_blank')">Open Folder</button>
+    `<div class="egnyte-link-row">
+      <div class="egnyte-link-label"><span class="egnyte-stage">Stage: ${l.Stage}</span> <span class="egnyte-participant">Participant: ${l.Participant}</span></div>
+      <button class="btn btn-small egnyte-open-btn" onclick="window.open('${l.Link}','_blank')">Open Folder</button>
     </div>`
   ).join('');
 }
