@@ -10,20 +10,30 @@ const CACHE_NAME = 'pkl-pivot-pwa-v65';
 const APP_SHELL = [
   './',
   './index.html',
-  './styles.css?v=36',
-  './app.js?v=72',
-  './pyodide-loader.js?v=33',
-  './pivot.js?v=31',
-  './manifest.json?v=1',
+  './styles.css',
+  './app.js',
+  './pyodide-loader.js',
+  './pivot.js',
+  './manifest.json',
   './icons/icon.svg',
   './icons/maskable.svg',
 ];
 
 self.addEventListener('install', (event) => {
+  // Use a resilient install step: try to cache app shell items individually
+  // so a single missing/404 resource won't abort installation.
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(APP_SHELL);
+      for (const url of APP_SHELL) {
+        try {
+          const resp = await fetch(url, { cache: 'no-store' });
+          if (resp && resp.ok) await cache.put(url, resp.clone());
+        } catch (err) {
+          // Ignore individual asset failures (dev-friendly).
+          console.warn('[service-worker] failed to cache', url, err);
+        }
+      }
       // Activate the new service worker ASAP (dev-friendly).
       await self.skipWaiting();
     })()
