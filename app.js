@@ -41,8 +41,7 @@ function showEgnyteModal() {
   content.innerHTML = links.map(l =>
     `<div style="margin:1em 0;">
       <b>Stage:</b> ${l.Stage} &nbsp; <b>Participant:</b> ${l.Participant}<br>
-      <button onclick="window.open('${l.Link}','_blank')">Open Folder</button>
-      <a href="${l.Link}" target="_blank" style="margin-left:0.7em;font-size:0.95em;">${l.Link}</a>
+      <button class="btn btn-small" onclick="window.open('${l.Link}','_blank')">Open Folder</button>
     </div>`
   ).join('');
 }
