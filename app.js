@@ -1,5 +1,5 @@
-import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=33';
-import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
+import { unpickleDataFrameToRecords } from './pyodide-loader.js';
+import { buildPivot, renderPivotGrid } from './pivot.js';
 // --- Egnyte Modal Integration ---
 const egnyteLinks = [
   { Link: 'https://furtherllc.egnyte.com/fl/xBTGxYRC8MMK', Stage: '24A', Participant: 'AT&T' },
