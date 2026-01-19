@@ -47,7 +47,8 @@ function getSelectedEgnyteLinks() {
 function showEgnyteModal() {
   const modal = document.getElementById('egnyteModal');
   const content = document.getElementById('egnyteModalContent');
-  modal.style.display = 'block';
+  // Modal overlay CSS uses flex layout; set to 'flex' when showing.
+  modal.style.display = 'flex';
   const links = getSelectedEgnyteLinks();
   if (!links.length) {
     content.innerHTML = '<div style="margin:1em 0;">No Egnyte folder links for current selection.</div>';

@@ -44,7 +44,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.map((k) => (k === CACHE_NAME ? null : caches.delete(k))));
+      // Delete only caches that are not the current cache name.
+      const toDelete = keys.filter((k) => k !== CACHE_NAME);
+      await Promise.all(toDelete.map((k) => caches.delete(k)));
       await self.clients.claim();
     })()
   );
@@ -80,13 +82,19 @@ self.addEventListener('fetch', (event) => {
       const cached = await caches.match(req);
       if (cached) return cached;
 
-      const res = await fetch(req);
-      // Cache GET requests (best-effort).
-      if (req.method === 'GET' && res.ok) {
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(req, res.clone());
+      try {
+        const res = await fetch(req);
+        // Cache GET requests (best-effort).
+        if (req.method === 'GET' && res && res.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(req, res.clone());
+        }
+        return res;
+      } catch (err) {
+        // Network failure: return cached fallback if available.
+        const fallback = await caches.match(req);
+        return fallback || Response.error();
       }
-      return res;
     })()
   );
 });
