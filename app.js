@@ -47,7 +47,7 @@ function showEgnyteModal() {
   ).join('');
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+function attachEgnyteBtnListener() {
   const egnyteBtn = document.getElementById('egnyteBtn');
   const egnyteModal = document.getElementById('egnyteModal');
   const egnyteModalClose = document.getElementById('egnyteModalClose');
@@ -56,22 +56,29 @@ window.addEventListener('DOMContentLoaded', () => {
     if (debugLog) debugLog.textContent += `\n[Egnyte] ${msg}`;
     console.log('[Egnyte]', msg);
   }
-  if (egnyteBtn) egnyteBtn.addEventListener('click', () => {
-    logDebug('Go to Egnyte button clicked');
-    showEgnyteModal();
-  });
-  if (egnyteModalClose) egnyteModalClose.addEventListener('click', () => {
+  if (egnyteBtn) {
+    egnyteBtn.onclick = () => {
+      logDebug('Go to Egnyte button clicked');
+      showEgnyteModal();
+    };
+  }
+  if (egnyteModalClose) egnyteModalClose.onclick = () => {
     logDebug('Egnyte modal closed');
     egnyteModal.style.display = 'none';
-  });
-  // Close modal on background click
-  if (egnyteModal) egnyteModal.addEventListener('click', e => {
+  };
+  if (egnyteModal) egnyteModal.onclick = (e) => {
     if (e.target === egnyteModal) {
       logDebug('Egnyte modal closed (background click)');
       egnyteModal.style.display = 'none';
     }
-  });
+  };
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  attachEgnyteBtnListener();
 });
+
+// If you have a function that re-renders filters, call attachEgnyteBtnListener() after rendering filters.
 import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=33';
 import { buildPivot, renderPivotGrid } from './pivot.js?v=31';
 
