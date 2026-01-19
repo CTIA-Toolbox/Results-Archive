@@ -51,13 +51,25 @@ window.addEventListener('DOMContentLoaded', () => {
   const egnyteBtn = document.getElementById('egnyteBtn');
   const egnyteModal = document.getElementById('egnyteModal');
   const egnyteModalClose = document.getElementById('egnyteModalClose');
-  if (egnyteBtn) egnyteBtn.addEventListener('click', showEgnyteModal);
+  const debugLog = document.getElementById('debugLog');
+  function logDebug(msg) {
+    if (debugLog) debugLog.textContent += `\n[Egnyte] ${msg}`;
+    console.log('[Egnyte]', msg);
+  }
+  if (egnyteBtn) egnyteBtn.addEventListener('click', () => {
+    logDebug('Go to Egnyte button clicked');
+    showEgnyteModal();
+  });
   if (egnyteModalClose) egnyteModalClose.addEventListener('click', () => {
+    logDebug('Egnyte modal closed');
     egnyteModal.style.display = 'none';
   });
   // Close modal on background click
   if (egnyteModal) egnyteModal.addEventListener('click', e => {
-    if (e.target === egnyteModal) egnyteModal.style.display = 'none';
+    if (e.target === egnyteModal) {
+      logDebug('Egnyte modal closed (background click)');
+      egnyteModal.style.display = 'none';
+    }
   });
 });
 import { unpickleDataFrameToRecords } from './pyodide-loader.js?v=33';
