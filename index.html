@@ -145,6 +145,15 @@
       logEl.textContent += (logEl.textContent ? "\n" : "") + line;
     };
 
+    window.addEventListener('error', function(e) {
+      alert('A JavaScript error occurred: ' + e.message + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
+      log('Global error: ' + e.message + ' at ' + (e.filename || '') + ':' + (e.lineno || ''));
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      alert('A JavaScript promise error occurred: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+      log('Global promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+
     log('Bootstrapping app module…');
     import('./app.js?v=72').then(() => {
       log('App module loaded.');
