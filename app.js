@@ -61,6 +61,9 @@ function attachEgnyteBtnListener() {
       logDebug('Go to Egnyte button clicked');
       showEgnyteModal();
     };
+    logDebug('Egnyte button event listener attached');
+  } else {
+    logDebug('Egnyte button NOT FOUND when trying to attach event listener');
   }
   if (egnyteModalClose) egnyteModalClose.onclick = () => {
     logDebug('Egnyte modal closed');
@@ -73,6 +76,15 @@ function attachEgnyteBtnListener() {
     }
   };
 }
+
+// Attach immediately if DOM is already loaded
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  attachEgnyteBtnListener();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  attachEgnyteBtnListener();
+});
 
 window.addEventListener('DOMContentLoaded', () => {
   attachEgnyteBtnListener();
