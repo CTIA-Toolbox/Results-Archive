@@ -2487,18 +2487,21 @@ function render() {
 async function onFileSelected(file) {
   enableControls(false);
   setStatus('Reading file…');
-  logDebug(`File selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes)`);
+  logDebug(`[onFileSelected] File selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes, type=${file?.type ?? 'unknown'})`);
 
   try {
+    logDebug('[onFileSelected] Reading file as ArrayBuffer…');
     const buf = await file.arrayBuffer();
+    logDebug(`[onFileSelected] ArrayBuffer read: ${buf.byteLength} bytes`);
     const bytes = new Uint8Array(buf);
 
     setStatus('Loading Pyodide + pandas (first load can take a bit)…');
+    logDebug('[onFileSelected] Ensuring Pyodide is available…');
     await ensurePyodideAvailable();
-    logDebug('Starting Pyodide unpickle…');
+    logDebug('[onFileSelected] Starting Pyodide unpickle…');
 
     const { columns, records } = await unpickleDataFrameToRecords(bytes);
-    logDebug('Unpickle succeeded. Converting to pivot view…');
+    logDebug(`[onFileSelected] Unpickle succeeded. ${records.length} records, ${columns.length} columns.`);
 
     state.columns = columns;
     state.dimCols = guessDimensionColumns(columns);
@@ -2515,7 +2518,7 @@ async function onFileSelected(file) {
     // Cache known building values for case-insensitive mapping (manual input).
     // Source from whichever dataset(s) are loaded (archive and/or call).
     recomputeKnownBuildings();
-    logDebug(`Detected building columns: archive=${state.dimCols.building ?? '(none)'}, call=${callState.dimCols.building ?? '(none)'}; buildings=${state.knownBuildings.length}`);
+    logDebug(`[onFileSelected] Detected building columns: archive=${state.dimCols.building ?? '(none)'}, call=${callState.dimCols.building ?? '(none)'}; buildings=${state.knownBuildings.length}`);
 
     // Reset filters on new load.
     for (const k of Object.keys(state.filters)) state.filters[k].clear();
@@ -2545,7 +2548,7 @@ async function onFileSelected(file) {
     if (els.zoomSelect) els.zoomSelect.disabled = false;
     setExportEnabled(false);
     setStatus(`Loaded ${records.length.toLocaleString()} rows. Select building(s) above to begin.`);
-    logDebug(`Loaded ${records.length} rows, ${columns.length} columns.`);
+    logDebug(`[onFileSelected] Loaded ${records.length} rows, ${columns.length} columns.`);
 
     render();
 
@@ -2553,7 +2556,7 @@ async function onFileSelected(file) {
   } catch (err) {
     console.error(err);
     setStatus(`Load failed: ${err?.message ?? String(err)}`, { error: true });
-    logDebug(`Load failed: ${err?.stack ?? (err?.message ?? String(err))}`);
+    logDebug(`[onFileSelected] Load failed: ${err?.stack ?? (err?.message ?? String(err))}`);
     if (els.gridContainer) els.gridContainer.innerHTML = '<div class="placeholder">Failed to load dataset.</div>';
     if (els.gridSummary) els.gridSummary.textContent = 'Load failed.';
   }
@@ -2858,13 +2861,18 @@ if (!els.fileInput) {
   logDebug('Fatal: #fileInput not found.');
 } else {
   els.fileInput.addEventListener('click', () => {
+    logDebug('fileInput clicked, clearing value');
     els.fileInput.value = '';
   });
 
   els.fileInput.addEventListener('change', () => {
-    const file = els.fileInput.files?.[0];
-    if (!file) return;
     logDebug('fileInput change event fired.');
+    const file = els.fileInput.files?.[0];
+    if (!file) {
+      logDebug('No file selected in fileInput change event.');
+      return;
+    }
+    logDebug(`fileInput selected file: name=${file.name}, size=${file.size}, type=${file.type}`);
     onFileSelected(file);
   });
 }
