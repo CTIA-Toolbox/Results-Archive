@@ -2891,6 +2891,7 @@ function attachFileInputListeners() {
   }
 
   console.log('[app] attaching fileInput listeners, element=', els.fileInput);
+  console.log('REACHED FILE INPUT HANDLER SETUP');
   if (els.fileInput.__listenersAttached) {
     console.log('[DIAG] attachFileInputListeners: listeners already attached, returning early');
     return;
