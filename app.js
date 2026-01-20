@@ -531,6 +531,7 @@ logDebug('app.js initialized.');
 
 // No previous-session restore: clear any legacy saved blobs and hide the info rows.
 console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
+/*
 (async () => {
   try {
     if (els.lastDatasetInfo) els.lastDatasetInfo.textContent = '';
@@ -542,6 +543,8 @@ console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
     // ignore
   }
 })();
+*/
+
 
 function setGridZoom(value) {
   const v = Number(value);
@@ -551,12 +554,17 @@ function setGridZoom(value) {
 }
 
 // Restore grid zoom preference early.
+/*
 try {
   const saved = localStorage.getItem('resultsArchive.gridZoom');
   if (saved) setGridZoom(saved);
 } catch {
   // ignore
 }
+*/
+console.log('REACHED 8: AFTER_STORAGE_STARTUP');
+setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
+logDebug('app.js initialized (storage startup temporarily disabled).');
 
 function detectColumn(columns, candidates) {
   const lower = columns.map((c) => String(c).toLowerCase());
@@ -848,6 +856,7 @@ function buildBuildingHealthAoA() {
   };
 
   const fmtPct = (num) => (Number.isFinite(num) ? num : '');
+
 
   const header = [
     'Building',

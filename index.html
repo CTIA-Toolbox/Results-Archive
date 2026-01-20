@@ -132,13 +132,14 @@
   </main>
 
   <footer class="app-footer muted">
-    <strong id="buildStamp">dev-98</strong>
+    <strong id="buildStamp">dev-99</strong>
   </footer>
 
 
   <!-- Load the app module with a visible error fallback (so failures aren't silent). -->
   <script type="module" src="./app.js"></script>
-  
+
+  <script>
     const logEl = document.getElementById('debugLog');
     const statusEl = document.getElementById('statusText');
     const log = (msg) => {
@@ -157,6 +158,8 @@
     });
 
     log('Bootstrapping app module…');
+  </script>
+
     // The import below is now redundant, but left for fallback error handling.
     // import('./app.js').then(() => {
     //   log('App module loaded.');
