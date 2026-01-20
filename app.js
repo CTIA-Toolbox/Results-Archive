@@ -1,4 +1,10 @@
 // Ensure all imports use correct relative paths
+window.addEventListener('error', function(event) {
+  console.error('[GLOBAL ERROR HANDLER]', event.message, event.filename, event.lineno, event.colno, event.error);
+});
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('[GLOBAL PROMISE REJECTION]', event.reason);
+});
 console.log('REACHED 1: TOP OF FILE');
 import { unpickleDataFrameToRecords } from './pyodide-loader.js';
 import { buildPivot, renderPivotGrid } from './pivot.js';
