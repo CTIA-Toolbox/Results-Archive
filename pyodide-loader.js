@@ -115,6 +115,8 @@ records_json = df.to_json(orient='records')
     return result;
   } finally {
     // Clean up globals to reduce memory pressure.
-    pyodide.globals.delete('PKL_BYTES');
+    if (pyodide.globals.has('PKL_BYTES')) {
+      pyodide.globals.delete('PKL_BYTES');
+    }
   }
 }
