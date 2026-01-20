@@ -1523,8 +1523,26 @@ function exportCurrentPivotToExcel() {
     }
   }
 
+  // Header cell merging logic
+  ws['!merges'] = ws['!merges'] || [];
+  // Merge columns A–E vertically (A4+A5, B4+B5, ..., E4+E5)
+  for (let c = 0; c < leftCount; c++) {
+    ws['!merges'].push({ s: { r: HEADER_TOP_ROW, c }, e: { r: HEADER_SUB_ROW, c } });
+  }
+  // Merge stage group headers horizontally in row 4 only
+  for (let i = 0; i < stages.length; i++) {
+    const startCol = leftCount + i * metricCount;
+    const endCol = startCol + metricCount - 1;
+    if (endCol > startCol) {
+      ws['!merges'].push({ s: { r: HEADER_TOP_ROW, c: startCol }, e: { r: HEADER_TOP_ROW, c: endCol } });
+    }
+  }
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Stage Comparison');
+  // ...existing code...
+    wsBuilding['!rows'][HEADER_TOP_ROW] = { hpt: 22, font: { bold: true } };
+    XLSX.utils.book_append_sheet(wb, wsBuilding, String(building || 'Building'));
+  }
 
   // Building health check sheet
   const wsHealth = XLSX.utils.aoa_to_sheet(buildBuildingHealthAoA());
@@ -1552,7 +1570,7 @@ function exportCurrentPivotToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
-}
+
 
 function guessDimensionColumns(columns) {
   return {
