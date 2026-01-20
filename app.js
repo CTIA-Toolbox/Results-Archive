@@ -1548,46 +1548,23 @@ function exportCurrentPivotToExcel() {
   const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: leftCount });
   ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit, topLeftCell, activePane: 'bottomRight' } }];
 
-  // --- Styles ---
-  // ...existing code...
-
-  // --- Apply styles ---
-  // Timestamp row (row 1)
-  ws['!merges'] = ws['!merges'] || [];
-  ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } });
-  for (let c = 0; c <= lastCol; c++) {
-    const addr = XLSX.utils.encode_cell({ r: 1, c });
-    if (ws[addr]) ws[addr].s = STYLE_TIMESTAMP;
-  }
+  // --- Apply styles using applyStyle only ---
+  // Title row
+  for (let c = 0; c <= lastCol; c++) applyStyle(0, c, STYLE_TITLE);
+  // Generated row
+  for (let c = 0; c <= lastCol; c++) applyStyle(1, c, STYLE_GENERATED);
   // Header rows (row 3, 4)
-  for (let r = 3; r <= 4; r++) {
-    for (let c = 0; c <= lastCol; c++) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      if (ws[addr]) ws[addr].s = STYLE_HEADER;
-    }
-  }
+  for (let r = 3; r <= 4; r++) for (let c = 0; c <= lastCol; c++) applyStyle(r, c, STYLE_HDR);
   // Data rows
   for (let r = 5; r <= lastRow; r++) {
     for (let c = 0; c <= lastCol; c++) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      if (!ws[addr]) continue;
-      // Column E (index 4): Calibri, 11, black (not header)
       if (c === 4) {
-        ws[addr].s = STYLE_IDENTIFIER;
-        continue;
+        applyStyle(r, c, STYLE_IDENTIFIER);
+      } else if (c >= 0 && c <= 3) {
+        applyStyle(r, c, STYLE_LEFTCOLS);
+      } else if (!isNaN(Number(ws[XLSX.utils.encode_cell({ r, c })]?.v)) && ws[XLSX.utils.encode_cell({ r, c })]?.v !== '') {
+        applyStyle(r, c, STYLE_DATA_NUM);
       }
-      // Columns A-D (0-3): Calibri, 11, green (not header)
-      if (c >= 0 && c <= 3) {
-        ws[addr].s = STYLE_LEFTCOLS;
-        continue;
-      }
-      // All numerical values: Calibri, 10, red
-      if (!isNaN(Number(ws[addr].v)) && ws[addr].v !== '') {
-        ws[addr].s = STYLE_DATA_NUM;
-        continue;
-      }
-      // Default: no fill, Calibri, 11, black
-      ws[addr].s = STYLE_IDENTIFIER;
     }
   }
 
@@ -1600,43 +1577,6 @@ function exportCurrentPivotToExcel() {
     cell.s = { ...(cell.s || {}), ...(style || {}) };
   };
 
-  // Row heights
-  ws['!rows'] = ws['!rows'] || [];
-  ws['!rows'][0] = { hpt: 28 };
-  ws['!rows'][1] = { hpt: 16 };
-  ws['!rows'][2] = { hpt: 8 };
-  ws['!rows'][HEADER_TOP_ROW] = { hpt: 22 };
-  ws['!rows'][HEADER_SUB_ROW] = { hpt: 20 };
-
-  // Title row style
-  for (let c = 0; c <= lastCol; c++) {
-    applyStyle(0, c, STYLE_TITLE);
-  }
-  // Timestamp row style (merged, italic, gray fill, centered)
-  for (let c = 0; c <= lastCol; c++) {
-    applyStyle(1, c, STYLE_GENERATED);
-  }
-  ws['!merges'] = ws['!merges'] || [];
-  ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } });
-  // Header styles
-  for (let c = 0; c <= lastCol; c++) {
-    applyStyle(HEADER_TOP_ROW, c, STYLE_HDR);
-    applyStyle(HEADER_SUB_ROW, c, STYLE_HDR);
-  }
-  // Data styles
-  for (let r = DATA_START_ROW; r <= lastRow; r++) {
-    for (let c = 0; c <= lastCol; c++) {
-      // Columns A-D (0-3), not header
-      if (c >= 0 && c <= 3 && r !== HEADER_TOP_ROW && r !== HEADER_SUB_ROW) {
-        applyStyle(r, c, STYLE_LEFTCOLS);
-      } else if (c === 4 && r !== HEADER_TOP_ROW && r !== HEADER_SUB_ROW) {
-        applyStyle(r, c, STYLE_IDENTIFIER);
-      } else {
-        const isMetric = c >= leftCount;
-        applyStyle(r, c, isMetric ? STYLE_NUM : STYLE_TEXT);
-      }
-    }
-  }
 
   const wb = XLSX.utils.book_new();
 
