@@ -1413,6 +1413,7 @@ function exportCurrentPivotToExcel() {
     }
     aoa.push(row);
   }
+  const ySplit = 5;
   const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: leftCount });
   ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit, topLeftCell, activePane: 'bottomRight' } }];
 
