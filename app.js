@@ -1659,11 +1659,6 @@ function exportCurrentPivotToExcel() {
     applyStyle(HEADER_SUB_ROW, c, STYLE_HDR);
   }
   // Data styles
-  const STYLE_IDENTIFIER = {
-    font: { name: 'Calibri', sz: 10, color: { rgb: 'FF000000' } },
-    alignment: { horizontal: 'left', vertical: 'top' },
-    border: BORDER_THIN,
-  };
   for (let r = DATA_START_ROW; r <= lastRow; r++) {
     for (let c = 0; c <= lastCol; c++) {
       // Columns A-D (0-3), not header
