@@ -1694,7 +1694,6 @@ function exportCurrentPivotToExcel() {
   }
   }
 
-
 function guessDimensionColumns(columns) {
   return {
     stage: detectColumn(columns, ['stage', 'stg', 'phase']),
