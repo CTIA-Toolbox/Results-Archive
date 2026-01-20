@@ -1589,44 +1589,7 @@ function exportCurrentPivotToExcel() {
     }
   }
 
-  // ...existing code...
-  // Color palette
-  const GREEN = 'FF1CA45C';
-  const HEADER_FILL = 'FF1F4E78';
-  const ORANGE = 'FFFF9900';
-  const GRAY = 'FFD9D9D9';
-  const SUMMARY_GRAY = 'FFF2F2F2';
-  // Styles
-  // ...existing code...
-  const STYLE_TEXT = {
-    font: { color: { rgb: GREEN } },
-    alignment: { horizontal: 'left', vertical: 'top' },
-    border: BORDER_THIN,
-  };
-  const STYLE_NUM = {
-    font: { color: { rgb: GREEN } },
-    alignment: { horizontal: 'right', vertical: 'top' },
-    border: BORDER_THIN,
-    numFmt: '0.00',
-  };
-  const STYLE_SUMMARY = {
-    font: { bold: true, color: { rgb: GREEN } },
-    fill: { patternType: 'solid', fgColor: { rgb: SUMMARY_GRAY } },
-    alignment: { horizontal: 'right', vertical: 'center' },
-    border: BORDER_THIN,
-  };
-  const STYLE_SUMMARY_LABEL = {
-    font: { bold: true, color: { rgb: GREEN } },
-    fill: { patternType: 'solid', fgColor: { rgb: SUMMARY_GRAY } },
-    alignment: { horizontal: 'left', vertical: 'center' },
-    border: BORDER_THIN,
-  };
-  // ...existing code...
-  const STYLE_GROUP_LABEL = {
-    font: { bold: true, color: { rgb: GREEN } },
-    alignment: { horizontal: 'left', vertical: 'center' },
-    border: BORDER_THIN,
-  };
+  
 
   const applyStyle = (r, c, style) => {
     const addr = XLSX.utils.encode_cell({ r, c });
