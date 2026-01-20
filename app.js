@@ -1380,7 +1380,6 @@ function exportCurrentPivotToExcel() {
 
   const aoa = [titleRow, generatedRow, spacerRow, headerTop, headerSub];
   const HEADER_TOP_ROW = 3, HEADER_SUB_ROW = 4, DATA_START_ROW = 5;
-  
 
   const exportRowIds = state.dimCols.row_type
     ? sortRowIdsByRowKeys(pivot.rows, pivot, {
@@ -1409,17 +1408,27 @@ function exportCurrentPivotToExcel() {
     // Fill metric columns for each stage
     for (let s = 0; s < stages.length; s++) {
       for (let m = 0; m < metricKeys.length; m++) {
-        const v = pivot.data?.get(rowId)?.get(stages[s])?.[metricKeys[m]];
-        row.push(v === undefined ? '' : v);
+        // Use the correct data structure for your pivot (values or data)
+        const v = pivot.values?.[rowId]?.[stages[s]]?.[metricKeys[m]] ?? 
+                  pivot.data?.get?.(rowId)?.get?.(stages[s])?.[metricKeys[m]];
+        let formatted = '';
+        if (v !== undefined && v !== null && v !== '') {
+          const num = typeof v === 'number' ? v : Number(v);
+          if (Number.isFinite(num) && String(v).trim() !== '') {
+            formatted = num.toFixed(2);
+          } else {
+            formatted = String(v);
+          }
+        }
+        row.push(formatted);
       }
     }
     aoa.push(row);
   }
 
   const lastRow = aoa.length - 1;
-    
   const ySplit = 5;
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
   const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: leftCount });
   ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit, topLeftCell, activePane: 'bottomRight' } }];
 
@@ -1519,23 +1528,8 @@ function exportCurrentPivotToExcel() {
   // Building health check sheet
   const wsHealth = XLSX.utils.aoa_to_sheet(buildBuildingHealthAoA());
   wsHealth['!cols'] = [
-    { wch: 18 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 8 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 14 },
-    { wch: 8 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 14 },
+    { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+    { wch: 10 }, { wch: 14 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
   ];
   XLSX.utils.book_append_sheet(wb, wsHealth, 'Building Health');
 
