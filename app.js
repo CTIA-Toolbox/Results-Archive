@@ -1365,6 +1365,12 @@ function exportCurrentPivotToExcel() {
       border: BORDER_THIN,
       numFmt: '0.00',
     };
+    // Added missing STYLE_DATA_TEXT for text cells in export
+    const STYLE_DATA_TEXT = {
+      font: { color: { rgb: 'FF000000' } },
+      alignment: { horizontal: 'left', vertical: 'top' },
+      border: BORDER_THIN,
+    };
   const XLSX = window.XLSX;
   if (!XLSX) {
     setStatus('Excel export library not loaded yet. Please refresh and try again.', { error: true });
