@@ -1044,7 +1044,6 @@ function exportCallsToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
-}
 
 function parseNumber(v) {
   if (v === null || v === undefined) return null;
@@ -1596,10 +1595,74 @@ function exportCurrentPivotToExcel() {
 
     // Create worksheet for this building
     const wsBuilding = XLSX.utils.aoa_to_sheet(aoaBuilding);
-    // Bold building header row
     wsBuilding['!rows'] = wsBuilding['!rows'] || [];
-    wsBuilding['!rows'][HEADER_TOP_ROW] = { hpt: 22, font: { bold: true } };
-    XLSX.utils.book_append_sheet(wb, wsBuilding, String(building || 'Building'));
+    // --- Apply custom styles matching screenshot ---
+    const GRAY_HEADER = 'FFD9D9D9';
+    const ORANGE_HEADER = 'FFFF9900';
+    const GREEN = 'FF1CA45C';
+    const RED = 'FFCC0000';
+    // Left header columns (A-E): gray fill, bold, green font
+    for (let c = 0; c < leftCols.length; c++) {
+      const addrTop = XLSX.utils.encode_cell({ r: HEADER_TOP_ROW, c });
+      const addrSub = XLSX.utils.encode_cell({ r: HEADER_SUB_ROW, c });
+      if (wsBuilding[addrTop]) wsBuilding[addrTop].s = { font: { bold: true, color: { rgb: GREEN } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
+      if (wsBuilding[addrSub]) wsBuilding[addrSub].s = { font: { bold: true, color: { rgb: GREEN } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
+    }
+    // Stage headers (F4+G4, H4+I4, ...): orange fill, bold, white font
+    for (let i = 0; i < stages.length; i++) {
+      const startCol = leftCols.length + i * metricCount;
+      const endCol = startCol + metricCount - 1;
+      for (let c = startCol; c <= endCol; c++) {
+        const addrTop = XLSX.utils.encode_cell({ r: HEADER_TOP_ROW, c });
+        if (wsBuilding[addrTop]) wsBuilding[addrTop].s = { font: { bold: true, color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: ORANGE_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
+      }
+    }
+    // Metric subheaders (F5, G5, ...): gray fill, bold, black font
+    for (let c = leftCols.length; c < headerTop.length; c++) {
+      const addrSub = XLSX.utils.encode_cell({ r: HEADER_SUB_ROW, c });
+      if (wsBuilding[addrSub]) wsBuilding[addrSub].s = { font: { bold: true, color: { rgb: 'FF000000' } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
+    }
+    // Data and group label styles
+    const participantColIdx = leftCols.findIndex(c => c.key.toLowerCase() === 'participant');
+    const sectionColIdx = leftCols.findIndex(c => c.key.toLowerCase() === 'section');
+    for (let r = HEADER_SUB_ROW + 1; r < aoaBuilding.length; r++) {
+      const isGroupLabel = (
+        (participantColIdx >= 0 && wsBuilding[XLSX.utils.encode_cell({ r, c: participantColIdx })]?.v) ||
+        (sectionColIdx >= 0 && wsBuilding[XLSX.utils.encode_cell({ r, c: sectionColIdx })]?.v)
+      );
+      for (let c = 0; c < headerTop.length; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = wsBuilding[addr];
+        if (!cell) continue;
+        if (isGroupLabel) {
+          // Bold, green group label
+          cell.s = { font: { bold: true, color: { rgb: GREEN } }, alignment: { horizontal: 'left', vertical: 'center' }, border: BORDER_THIN_BLACK };
+        } else if (c >= leftCols.length) {
+          // Metric columns: red numbers, right aligned
+          cell.s = { font: { color: { rgb: RED } }, alignment: { horizontal: 'right', vertical: 'top' }, border: BORDER_THIN_BLACK, numFmt: '0.0' };
+        } else {
+          // Text columns: left aligned, border
+          cell.s = { alignment: { horizontal: 'left', vertical: 'top' }, border: BORDER_THIN_BLACK };
+        }
+      }
+    }
+    // Merge headers as before
+    wsBuilding['!merges'] = wsBuilding['!merges'] || [];
+    for (let c = 0; c < leftCols.length; c++) {
+      wsBuilding['!merges'].push({ s: { r: HEADER_TOP_ROW, c }, e: { r: HEADER_SUB_ROW, c } });
+    }
+    for (let i = 0; i < stages.length; i++) {
+      const startCol = leftCols.length + i * metricCount;
+      const endCol = startCol + metricCount - 1;
+      if (endCol > startCol) {
+        wsBuilding['!merges'].push({ s: { r: HEADER_TOP_ROW, c: startCol }, e: { r: HEADER_TOP_ROW, c: endCol } });
+      }
+    }
+    // Set worksheet name to building ID (or 'Building' if missing)
+    let sheetName = String(building || 'Building');
+    if (!sheetName.trim()) sheetName = 'Building';
+    XLSX.utils.book_append_sheet(wb, wsBuilding, sheetName);
+  }
   }
 
   // Building health check sheet
@@ -1611,19 +1674,20 @@ function exportCurrentPivotToExcel() {
   XLSX.utils.book_append_sheet(wb, wsHealth, 'Building Health');
 
   // Filters/metadata sheet
-  const ws2 = XLSX.utils.aoa_to_sheet(buildFiltersSummaryAoA());
-  ws2['!cols'] = [{ wch: 24 }, { wch: 120 }];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Filters');
 
-  const dt = new Date();
-  const buildingPart = state.filters.building && state.filters.building.size
+  const ws2_filters = XLSX.utils.aoa_to_sheet(buildFiltersSummaryAoA());
+  ws2_filters['!cols'] = [{ wch: 24 }, { wch: 120 }];
+  XLSX.utils.book_append_sheet(wb, ws2_filters, 'Filters');
+
+  const dt_export = new Date();
+  const buildingPart_export = state.filters.building && state.filters.building.size
     ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
     : '';
-  const filename = `Stage_Comparison_${formatDateForFilename(dt)}${buildingPart}.xlsx`;
+  const filename_export = `Stage_Comparison_${formatDateForFilename(dt_export)}${buildingPart_export}.xlsx`;
 
   try {
-    XLSX.writeFile(wb, filename, { compression: true });
-    setStatus(`Exported Excel: ${filename}`);
+    XLSX.writeFile(wb, filename_export, { compression: true });
+    setStatus(`Exported Excel: ${filename_export}`);
   } catch (err) {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
