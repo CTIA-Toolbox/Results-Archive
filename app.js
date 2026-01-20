@@ -50,7 +50,7 @@ function getSelectedEgnyteLinks() {
     (stages.length === 0 || stages.includes(l.Stage)) &&
     (participants.length === 0 || participants.includes(l.Participant))
   );
-}
+// ...existing code...
 
 function showEgnyteModal() {
   const modal = document.getElementById('egnyteModal');
@@ -69,7 +69,7 @@ function showEgnyteModal() {
       <button class="btn btn-small egnyte-open-btn" onclick="window.open('${l.Link}','_blank')">Open Folder</button>
     </div>`
   ).join('');
-}
+// ...existing code...
 
 function attachEgnyteBtnListener() {
   const egnyteBtn = document.getElementById('egnyteBtn');
@@ -563,16 +563,20 @@ try {
   // ignore
 }
 */
+
 console.log('REACHED 8: AFTER_STORAGE_STARTUP');
+
 // ...existing code...
-  try {
-    setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
-    logDebug('app.js initialized (storage startup temporarily disabled).');
-    console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
-  } catch (err) {
-    console.error('[DIAG] Error after REACHED 8:', err);
-  }
-  // ...existing code...
+
+try {
+  setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
+  logDebug('app.js initialized (storage startup temporarily disabled).');
+  console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+} catch (err) {
+  console.error('[DIAG] Error after REACHED 8:', err);
+}
+
+// ...existing code...
 
 function detectColumn(columns, candidates) {
   const lower = columns.map((c) => String(c).toLowerCase());
@@ -1044,6 +1048,7 @@ function exportCallsToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
+}
 
 function parseNumber(v) {
   if (v === null || v === undefined) return null;
@@ -1285,6 +1290,7 @@ async function exportCallsToKml() {
     setStatus('KML export unavailable: missing required columns (Actual Lat/Lon + altitudes).', { error: true });
     return;
   }
+}
 
   // If we don't have surveyed geoid separation, exporting absolute altitudes from HAE may be offset.
   const c = callState.dimCols;
@@ -1695,6 +1701,7 @@ function exportCurrentPivotToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
+}
 
 // Ensure exportCurrentPivotToExcel is globally accessible for button event handlers
 window.exportCurrentPivotToExcel = exportCurrentPivotToExcel;
@@ -3091,4 +3098,5 @@ if (els.callFileInput) {
       console.error('[app] error in onCallFileSelected', err);
       if (els.debugLog) els.debugLog.textContent += `\n[app] error in onCallFileSelected: ${err?.message ?? err}`;
     }
-  });}}
+  });
+}
