@@ -1,3 +1,9 @@
+    // Added missing STYLE_STAGE_RED for special stage cells
+    const STYLE_STAGE_RED = {
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFC00000' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: BORDER_THIN,
+    };
 // Ensure all imports use correct relative paths
 window.addEventListener('error', function(event) {
   console.error('[GLOBAL ERROR HANDLER]', event.message, event.filename, event.lineno, event.colno, event.error);
@@ -1369,6 +1375,13 @@ function exportCurrentPivotToExcel() {
     const STYLE_DATA_TEXT = {
       font: { color: { rgb: 'FF000000' } },
       alignment: { horizontal: 'left', vertical: 'top' },
+      border: BORDER_THIN,
+    };
+
+    // Added missing STYLE_TITLE for worksheet title row
+    const STYLE_TITLE = {
+      font: { name: 'Calibri', sz: 14, bold: true, color: { rgb: 'FF1F4E78' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
       border: BORDER_THIN,
     };
   const XLSX = window.XLSX;
