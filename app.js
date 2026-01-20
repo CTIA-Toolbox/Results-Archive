@@ -1523,23 +1523,81 @@ function exportCurrentPivotToExcel() {
     }
   }
 
-  // Header cell merging logic
-  ws['!merges'] = ws['!merges'] || [];
-  // Merge columns A–E vertically (A4+A5, B4+B5, ..., E4+E5)
-  for (let c = 0; c < leftCount; c++) {
-    ws['!merges'].push({ s: { r: HEADER_TOP_ROW, c }, e: { r: HEADER_SUB_ROW, c } });
-  }
-  // Merge stage group headers horizontally in row 4 only
-  for (let i = 0; i < stages.length; i++) {
-    const startCol = leftCount + i * metricCount;
-    const endCol = startCol + metricCount - 1;
-    if (endCol > startCol) {
-      ws['!merges'].push({ s: { r: HEADER_TOP_ROW, c: startCol }, e: { r: HEADER_TOP_ROW, c: endCol } });
-    }
+  const wb = XLSX.utils.book_new();
+
+  // Group rows by building
+  const buildingGroups = {};
+  for (const rowId of exportRowIds) {
+    const meta = pivot.rowMeta?.get(rowId) ?? {};
+    const building = meta['Building'] || meta['building'] || meta[leftCols.find(c => c.key.toLowerCase() === 'building')?.key];
+    if (!buildingGroups[building]) buildingGroups[building] = [];
+    buildingGroups[building].push(rowId);
   }
 
-  const wb = XLSX.utils.book_new();
-  // ...existing code...
+  for (const building of Object.keys(buildingGroups)) {
+    let prevParticipant = null;
+    let prevSection = null;
+    let aoaBuilding = [titleRow, generatedRow, spacerRow, headerTop, headerSub];
+    const HEADER_TOP_ROW = 3, HEADER_SUB_ROW = 4, DATA_START_ROW = 5;
+    const prevVals = new Array(leftCols.length).fill(undefined);
+    for (const rowId of buildingGroups[building]) {
+      const meta = pivot.rowMeta?.get(rowId) ?? {};
+      const participant = meta['Participant'] || meta['participant'] || meta[leftCols.find(c => c.key.toLowerCase() === 'participant')?.key];
+      const section = meta['Section'] || meta['section'] || meta[leftCols.find(c => c.key.toLowerCase() === 'section')?.key];
+
+      // Insert blank row and bolded header for new participant
+      if (prevParticipant !== null && participant !== prevParticipant) {
+        aoaBuilding.push(Array(headerTop.length).fill(''));
+        const participantHeader = Array(leftCols.length).fill('');
+        participantHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'participant')] = participant;
+        aoaBuilding.push(participantHeader);
+      }
+      // Insert blank row and bolded header for new section
+      if (prevSection !== null && section !== prevSection) {
+        aoaBuilding.push(Array(headerTop.length).fill(''));
+        const sectionHeader = Array(leftCols.length).fill('');
+        sectionHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'section')] = section;
+        aoaBuilding.push(sectionHeader);
+      }
+      prevParticipant = participant;
+      prevSection = section;
+
+      // Build row as before
+      const row = [];
+      for (let i = 0; i < leftCols.length; i++) {
+        const key = leftCols[i].key;
+        const val = meta[key];
+        if (prevVals[i] === val) {
+          row.push('');
+        } else {
+          row.push(val);
+          prevVals[i] = val;
+        }
+      }
+      for (const s of stages) {
+        const rowMap = pivot.matrix?.get(rowId);
+        const cell = rowMap ? rowMap.get(s) : undefined;
+        for (const m of metricKeys) {
+          let v = cell && typeof cell === 'object' ? cell[m] : undefined;
+          let formatted = '';
+          if (v !== undefined && v !== null && v !== '') {
+            const num = typeof v === 'number' ? v : Number(v);
+            if (Number.isFinite(num) && String(v).trim() !== '') {
+              formatted = num.toFixed(2);
+            } else {
+              formatted = String(v);
+            }
+          }
+          row.push(formatted);
+        }
+      }
+      aoaBuilding.push(row);
+    }
+
+    // Create worksheet for this building
+    const wsBuilding = XLSX.utils.aoa_to_sheet(aoaBuilding);
+    // Bold building header row
+    wsBuilding['!rows'] = wsBuilding['!rows'] || [];
     wsBuilding['!rows'][HEADER_TOP_ROW] = { hpt: 22, font: { bold: true } };
     XLSX.utils.book_append_sheet(wb, wsBuilding, String(building || 'Building'));
   }
@@ -1570,7 +1628,7 @@ function exportCurrentPivotToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
-
+}
 
 function guessDimensionColumns(columns) {
   return {
