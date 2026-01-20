@@ -1409,7 +1409,7 @@ function exportCurrentPivotToExcel() {
     // Fill metric columns for each stage
     for (let s = 0; s < stages.length; s++) {
       for (let m = 0; m < metricKeys.length; m++) {
-        const v = pivot.values?.[rowId]?.[stages[s]]?.[metricKeys[m]];
+        const v = pivot.data?.get(rowId)?.get(stages[s])?.[metricKeys[m]];
         row.push(v === undefined ? '' : v);
       }
     }
