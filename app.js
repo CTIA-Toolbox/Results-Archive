@@ -1692,7 +1692,8 @@ function exportCurrentPivotToExcel() {
     console.error(err);
     setStatus(`Excel export failed: ${err?.message ?? String(err)}`, { error: true });
   }
-}
+  }
+
 
 function guessDimensionColumns(columns) {
   return {
@@ -2860,14 +2861,14 @@ async function onCallFileSelected(file) {
   await loadCallDatasetFromBytes({ bytes, fileInfo, saveToIdb: false, idbFile: null });
 }
 
+
+// --- Ensure all export event listeners are set after all functions are defined ---
 if (els.exportExcel) {
   els.exportExcel.addEventListener('click', () => exportCurrentPivotToExcel());
 }
-
 if (els.exportCallsExcel) {
   els.exportCallsExcel.addEventListener('click', () => exportCallsToExcel());
 }
-
 if (els.exportCallsKml) {
   els.exportCallsKml.addEventListener('click', () => exportCallsToKml());
 }
