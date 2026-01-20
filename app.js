@@ -563,6 +563,9 @@ try {
 }
 */
 console.log('REACHED 8: AFTER_STORAGE_STARTUP');
+// Ensure file input listeners are always attached after storage startup (even if storage is disabled)
+attachFileInputListeners();
+window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
 setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
 logDebug('app.js initialized (storage startup temporarily disabled).');
 
