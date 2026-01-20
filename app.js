@@ -106,13 +106,8 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
   attachEgnyteBtnListener();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  attachEgnyteBtnListener();
-});
 
-window.addEventListener('DOMContentLoaded', () => {
-  attachEgnyteBtnListener();
-});
+
 
 console.log('REACHED 3: AFTER_EGNYTE_LISTENER_SETUP');
 
@@ -2287,13 +2282,38 @@ function buildFiltersUI() {
       const otherActive = getActiveFilters(['building', 'row_type']);
       const sections = sortByPreferredOrder(Array.from(selectedSections), SECTION_ORDER);
 
+
       for (const sec of sections) {
         const sectionOnly = buildingScopedArchive.filter((r) => toKey(r?.[sectionCol]) === sec);
         const scoped = otherActive.length ? filterRecordsWithActive(sectionOnly, otherActive) : sectionOnly;
         let values;
         let allowedKeys;
 
-        if (participantCol) {
+        // --- BEGIN MODIFIED BLOCK: Add Stage as identifier filter dimension ---
+        const stageCol = state.dimCols.stage;
+        if (stageCol) {
+          const keyToLabel = new Map();
+          for (const r of scoped) {
+            const idVal = toKey(r?.[idCol]);
+            if (!idVal) continue;
+            const stageVal = toKey(r?.[stageCol]);
+            const pVal = toKey(r?.[participantCol]);
+            let label = idVal;
+            if (stageVal && pVal) {
+              label = `${stageVal} — ${pVal} — ${idVal}`;
+            } else if (stageVal) {
+              label = `${stageVal} — ${idVal}`;
+            } else if (pVal) {
+              label = `${pVal} — ${idVal}`;
+            }
+            // Compose a unique key including stage, participant, and id
+            const key = `${stageVal}\u0001${pVal}\u0001${idVal}`;
+            if (!keyToLabel.has(key)) keyToLabel.set(key, label);
+          }
+          const entries = Array.from(keyToLabel.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+          values = entries.map(([value, label]) => ({ value, label }));
+          allowedKeys = new Set(entries.map(([value]) => value));
+        } else if (participantCol) {
           const keyToLabel = new Map();
           for (const r of scoped) {
             const idVal = toKey(r?.[idCol]);
@@ -2303,7 +2323,6 @@ function buildFiltersUI() {
             const label = pVal ? `${pVal} — ${idVal}` : idVal;
             if (!keyToLabel.has(key)) keyToLabel.set(key, label);
           }
-
           const entries = Array.from(keyToLabel.entries()).sort((a, b) => a[1].localeCompare(b[1]));
           values = entries.map(([value, label]) => ({ value, label }));
           allowedKeys = new Set(entries.map(([value]) => value));
@@ -2313,6 +2332,7 @@ function buildFiltersUI() {
           values = ids;
           allowedKeys = new Set(ids);
         }
+        // --- END MODIFIED BLOCK ---
 
         if (!values || (Array.isArray(values) && values.length === 0)) continue;
 
