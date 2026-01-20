@@ -50,7 +50,7 @@ function getSelectedEgnyteLinks() {
     (stages.length === 0 || stages.includes(l.Stage)) &&
     (participants.length === 0 || participants.includes(l.Participant))
   );
-// ...existing code...
+}
 
 function showEgnyteModal() {
   const modal = document.getElementById('egnyteModal');
@@ -69,7 +69,8 @@ function showEgnyteModal() {
       <button class="btn btn-small egnyte-open-btn" onclick="window.open('${l.Link}','_blank')">Open Folder</button>
     </div>`
   ).join('');
-// ...existing code...
+}
+
 
 function attachEgnyteBtnListener() {
   const egnyteBtn = document.getElementById('egnyteBtn');
@@ -532,7 +533,7 @@ logDebug('app.js initialized.');
 
 // No previous-session restore: clear any legacy saved blobs and hide the info rows.
 console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
-/*
+
 (async () => {
   try {
     if (els.lastDatasetInfo) els.lastDatasetInfo.textContent = '';
@@ -544,7 +545,7 @@ console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
     // ignore
   }
 })();
-*/
+
 
 
 function setGridZoom(value) {
@@ -1290,7 +1291,7 @@ async function exportCallsToKml() {
     setStatus('KML export unavailable: missing required columns (Actual Lat/Lon + altitudes).', { error: true });
     return;
   }
-}
+
 
   // If we don't have surveyed geoid separation, exporting absolute altitudes from HAE may be offset.
   const c = callState.dimCols;
@@ -1669,7 +1670,7 @@ function exportCurrentPivotToExcel() {
     if (!sheetName.trim()) sheetName = 'Building';
     XLSX.utils.book_append_sheet(wb, wsBuilding, sheetName);
   }
-  }
+  
 
   // Building health check sheet
   const wsHealth = XLSX.utils.aoa_to_sheet(buildBuildingHealthAoA());
@@ -3100,3 +3101,4 @@ if (els.callFileInput) {
     }
   });
 }
+
