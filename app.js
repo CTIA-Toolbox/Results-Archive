@@ -1380,6 +1380,7 @@ function exportCurrentPivotToExcel() {
 
   const aoa = [titleRow, generatedRow, spacerRow, headerTop, headerSub];
   const HEADER_TOP_ROW = 3, HEADER_SUB_ROW = 4, DATA_START_ROW = 5;
+  const lastRow = aoa.length - 1;
 
   const exportRowIds = state.dimCols.row_type
     ? sortRowIdsByRowKeys(pivot.rows, pivot, {
