@@ -1335,6 +1335,40 @@ async function exportCallsToKml() {
 }
 
 function exportCurrentPivotToExcel() {
+    // --- Styles (define at top for global use in function) ---
+    const BORDER_THIN = {
+      top: { style: 'thin', color: { rgb: 'FF000000' } },
+      bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+      left: { style: 'thin', color: { rgb: 'FF000000' } },
+      right: { style: 'thin', color: { rgb: 'FF000000' } },
+    };
+    const STYLE_HEADER = {
+      font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+      fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: BORDER_THIN,
+    };
+    const STYLE_TIMESTAMP = {
+      font: { italic: true },
+      fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: BORDER_THIN,
+    };
+    const STYLE_DATA_TEXT = {
+      alignment: { horizontal: 'left', vertical: 'top' },
+      border: BORDER_THIN,
+    };
+    const STYLE_DATA_NUM = {
+      alignment: { horizontal: 'right', vertical: 'top' },
+      border: BORDER_THIN,
+      numFmt: '0.00',
+    };
+    const STYLE_STAGE_RED = {
+      font: { color: { rgb: 'FFC00000' } },
+      alignment: { horizontal: 'right', vertical: 'top' },
+      border: BORDER_THIN,
+      numFmt: '0.00',
+    };
   const XLSX = window.XLSX;
   if (!XLSX) {
     setStatus('Excel export library not loaded yet. Please refresh and try again.', { error: true });
@@ -1482,14 +1516,7 @@ function exportCurrentPivotToExcel() {
     }
   }
 
-  // Styling (xlsx-js-style) — match the screenshot style (bold title, dark blue headers, crisp borders).
-  // --- Custom styles as requested ---
-  const BORDER_THIN = {
-    top: { style: 'thin', color: { rgb: 'FF000000' } },
-    bottom: { style: 'thin', color: { rgb: 'FF000000' } },
-    left: { style: 'thin', color: { rgb: 'FF000000' } },
-    right: { style: 'thin', color: { rgb: 'FF000000' } },
-  };
+  // ...existing code...
   // Color palette
   const GREEN = 'FF1CA45C';
   const HEADER_FILL = 'FF1F4E78';
@@ -1548,12 +1575,7 @@ function exportCurrentPivotToExcel() {
     alignment: { horizontal: 'left', vertical: 'center' },
     border: BORDER_THIN,
   };
-  const STYLE_STAGE_RED = {
-    font: { color: { rgb: 'FFC00000' } },
-    alignment: { horizontal: 'right', vertical: 'top' },
-    border: BORDER_THIN,
-    numFmt: '0.00',
-  };
+  // ...existing code...
   const STYLE_GROUP_LABEL = {
     font: { bold: true, color: { rgb: GREEN } },
     alignment: { horizontal: 'left', vertical: 'center' },
