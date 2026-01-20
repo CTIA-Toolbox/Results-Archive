@@ -2880,9 +2880,7 @@ if (els.clearBuildings && els.buildingSelect) {
 
 
 // File input events — attach in a function and call on DOMContentLoaded as well
-// Ensure file input listeners are always attached after storage startup (even if storage is disabled)
-attachFileInputListeners();
-window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
+// ...existing code...
 function attachFileInputListeners() {
   console.log('[DIAG] attachFileInputListeners called');
   if (!els.fileInput) {
