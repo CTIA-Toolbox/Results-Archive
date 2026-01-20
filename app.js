@@ -564,8 +564,14 @@ try {
 */
 console.log('REACHED 8: AFTER_STORAGE_STARTUP');
 // ...existing code...
-setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
-logDebug('app.js initialized (storage startup temporarily disabled).');
+  try {
+    setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
+    logDebug('app.js initialized (storage startup temporarily disabled).');
+    console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+  } catch (err) {
+    console.error('[DIAG] Error after REACHED 8:', err);
+  }
+  // ...existing code...
 
 function detectColumn(columns, candidates) {
   const lower = columns.map((c) => String(c).toLowerCase());
