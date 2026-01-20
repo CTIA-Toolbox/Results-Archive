@@ -1435,63 +1435,95 @@ function exportCurrentPivotToExcel() {
 
   const lastRow = aoa.length - 1;
   const ySplit = 5;
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // --- Custom column widths as requested ---
+  ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [
+    { wch: 20 }, // Identifier
+    { wch: 15 }, // Building
+    { wch: 15 }, // Participant
+    { wch: 12 }, // OS
+    { wch: 18 }, // Section
+    ...Array(lastCol - 4).fill({ wch: 15 })
+  ];
   const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: leftCount });
   ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit, topLeftCell, activePane: 'bottomRight' } }];
 
-  // Column widths (roughly based on text length).
-  const maxChars = new Array(lastCol + 1).fill(6);
-  const sampleRows = Math.min(aoa.length, 400); // cap work
-  for (let r = 0; r < sampleRows; r++) {
-    const row = aoa[r];
-    for (let c = 0; c <= lastCol; c++) {
-      const v = row?.[c];
-      const s = v === null || v === undefined ? '' : String(v);
-      maxChars[c] = Math.min(60, Math.max(maxChars[c], s.length));
-    }
-  }
-  ws['!cols'] = maxChars.map((wch, i) => {
-    // Give left columns a bit more room.
-    const bonus = i < leftCount ? 4 : 0;
-    return { wch: Math.min(64, Math.max(8, wch + bonus)) };
-  });
-
   // Styling (xlsx-js-style) — match the screenshot style (bold title, dark blue headers, crisp borders).
-  const BORDER_THIN_BLACK = {
+  // --- Custom styles as requested ---
+  const BORDER_THIN = {
     top: { style: 'thin', color: { rgb: 'FF000000' } },
     bottom: { style: 'thin', color: { rgb: 'FF000000' } },
     left: { style: 'thin', color: { rgb: 'FF000000' } },
     right: { style: 'thin', color: { rgb: 'FF000000' } },
   };
-
-  const HEADER_FILL = 'FF0F3B5E';
-
-  const STYLE_TITLE = {
-    font: { bold: true, sz: 18, color: { rgb: 'FF000000' } },
-    alignment: { horizontal: 'left', vertical: 'center' },
-  };
-
-  const STYLE_GENERATED = {
-    font: { italic: true, sz: 10, color: { rgb: 'FF333333' } },
-    alignment: { horizontal: 'left', vertical: 'center' },
-  };
-
+  // Color palette
+  const GREEN = 'FF1CA45C';
+  const HEADER_FILL = 'FF1F4E78';
+  const ORANGE = 'FFFF9900';
+  const GRAY = 'FFD9D9D9';
+  const SUMMARY_GRAY = 'FFF2F2F2';
+  // Styles
   const STYLE_HDR = {
     font: { bold: true, color: { rgb: 'FFFFFFFF' } },
     fill: { patternType: 'solid', fgColor: { rgb: HEADER_FILL } },
     alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-    border: BORDER_THIN_BLACK,
+    border: BORDER_THIN,
   };
-
+  const STYLE_HDR_GREEN = {
+    font: { bold: true, color: { rgb: GREEN } },
+    fill: { patternType: 'solid', fgColor: { rgb: GRAY } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: BORDER_THIN,
+  };
+  const STYLE_HDR_ORANGE = {
+    font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: ORANGE } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: BORDER_THIN,
+  };
+  const STYLE_TITLE = {
+    font: { bold: true, sz: 18, color: { rgb: 'FF000000' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  };
+  const STYLE_GENERATED = {
+    font: { italic: true, sz: 10, color: { rgb: 'FF333333' } },
+    fill: { patternType: 'solid', fgColor: { rgb: GRAY } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: BORDER_THIN,
+  };
   const STYLE_TEXT = {
+    font: { color: { rgb: GREEN } },
     alignment: { horizontal: 'left', vertical: 'top' },
-    border: BORDER_THIN_BLACK,
+    border: BORDER_THIN,
   };
-
   const STYLE_NUM = {
+    font: { color: { rgb: GREEN } },
     alignment: { horizontal: 'right', vertical: 'top' },
-    border: BORDER_THIN_BLACK,
-    numFmt: '0.0',
+    border: BORDER_THIN,
+    numFmt: '0.00',
+  };
+  const STYLE_SUMMARY = {
+    font: { bold: true, color: { rgb: GREEN } },
+    fill: { patternType: 'solid', fgColor: { rgb: SUMMARY_GRAY } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    border: BORDER_THIN,
+  };
+  const STYLE_SUMMARY_LABEL = {
+    font: { bold: true, color: { rgb: GREEN } },
+    fill: { patternType: 'solid', fgColor: { rgb: SUMMARY_GRAY } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: BORDER_THIN,
+  };
+  const STYLE_STAGE_RED = {
+    font: { color: { rgb: 'FFC00000' } },
+    alignment: { horizontal: 'right', vertical: 'top' },
+    border: BORDER_THIN,
+    numFmt: '0.00',
+  };
+  const STYLE_GROUP_LABEL = {
+    font: { bold: true, color: { rgb: GREEN } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: BORDER_THIN,
   };
 
   const applyStyle = (r, c, style) => {
@@ -1509,29 +1541,39 @@ function exportCurrentPivotToExcel() {
   ws['!rows'][HEADER_TOP_ROW] = { hpt: 22 };
   ws['!rows'][HEADER_SUB_ROW] = { hpt: 20 };
 
-  // Title / generated styles (merged across)
+  // Title row style
   for (let c = 0; c <= lastCol; c++) {
     applyStyle(0, c, STYLE_TITLE);
+  }
+  // Timestamp row style (merged, italic, gray fill, centered)
+  for (let c = 0; c <= lastCol; c++) {
     applyStyle(1, c, STYLE_GENERATED);
   }
-
-  // Header styles (both header rows)
+  ws['!merges'] = ws['!merges'] || [];
+  ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } });
+  // Header styles
   for (let c = 0; c <= lastCol; c++) {
     applyStyle(HEADER_TOP_ROW, c, STYLE_HDR);
     applyStyle(HEADER_SUB_ROW, c, STYLE_HDR);
   }
-
   // Data styles
   for (let r = DATA_START_ROW; r <= lastRow; r++) {
     for (let c = 0; c <= lastCol; c++) {
       const isMetric = c >= leftCount;
-      applyStyle(r, c, isMetric ? STYLE_NUM : STYLE_TEXT);
+      // Red font for Stage 1d and Za columns
+      const stageIdx = isMetric ? Math.floor((c - leftCount) / metricCount) : -1;
+      const stageName = isMetric && stages[stageIdx] ? String(stages[stageIdx]).toLowerCase() : '';
+      if (isMetric && (stageName.includes('1d') || stageName.includes('za'))) {
+        applyStyle(r, c, STYLE_STAGE_RED);
+      } else {
+        applyStyle(r, c, isMetric ? STYLE_NUM : STYLE_TEXT);
+      }
     }
   }
 
   const wb = XLSX.utils.book_new();
 
-  // Group rows by building
+  // Group rows by building and participant, insert summary row at top of each participant section
   const buildingGroups = {};
   for (const rowId of exportRowIds) {
     const meta = pivot.rowMeta?.get(rowId) ?? {};
@@ -1539,13 +1581,8 @@ function exportCurrentPivotToExcel() {
     if (!buildingGroups[building]) buildingGroups[building] = [];
     buildingGroups[building].push(rowId);
   }
-
   for (const building of Object.keys(buildingGroups)) {
-    // (Declarations moved inside the new block below)
     let aoaBuilding = [];
-    const HEADER_TOP_ROW = 3, HEADER_SUB_ROW = 4, DATA_START_ROW = 5;
-    const prevVals = new Array(leftCols.length).fill(undefined);
-    // Sort building rows by participant, then by section using SECTION_ORDER
     const SECTION_ORDER = ['Results', 'Location Technology', 'Handset', 'Point', 'Path'];
     const buildingRows = buildingGroups[building].map(rowId => {
       const meta = pivot.rowMeta?.get(rowId) ?? {};
@@ -1554,9 +1591,7 @@ function exportCurrentPivotToExcel() {
       return { rowId, participant, section, meta };
     });
     buildingRows.sort((a, b) => {
-      // Sort by participant first
       if (a.participant !== b.participant) return String(a.participant).localeCompare(String(b.participant));
-      // Then by section order
       const aIdx = SECTION_ORDER.indexOf(a.section);
       const bIdx = SECTION_ORDER.indexOf(b.section);
       if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
@@ -1564,11 +1599,11 @@ function exportCurrentPivotToExcel() {
       if (bIdx !== -1) return 1;
       return String(a.section).localeCompare(String(b.section));
     });
-
     let prevParticipant = null;
     let prevSection = null;
+    let prevVals = new Array(leftCols.length).fill(undefined);
     for (const { rowId, participant, section, meta } of buildingRows) {
-      // Insert header and blank row for new participant
+      // Insert header and summary row for new participant
       if (prevParticipant !== null && participant !== prevParticipant) {
         aoaBuilding.push(Array(headerTop.length).fill(''));
         // Insert header rows before each participant section
@@ -1577,9 +1612,11 @@ function exportCurrentPivotToExcel() {
         aoaBuilding.push([...spacerRow]);
         aoaBuilding.push([...headerTop]);
         aoaBuilding.push([...headerSub]);
-        const participantHeader = Array(leftCols.length).fill('');
-        participantHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'participant')] = participant;
-        aoaBuilding.push(participantHeader);
+        // Insert summary row
+        const summaryRow = Array(headerTop.length).fill('');
+        summaryRow[1] = building;
+        summaryRow[2] = participant;
+        aoaBuilding.push(summaryRow);
       }
       // Insert blank row and bolded header for new section
       if (prevSection !== null && section !== prevSection) {
@@ -1595,13 +1632,14 @@ function exportCurrentPivotToExcel() {
         aoaBuilding.push([...spacerRow]);
         aoaBuilding.push([...headerTop]);
         aoaBuilding.push([...headerSub]);
-        const participantHeader = Array(leftCols.length).fill('');
-        participantHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'participant')] = participant;
-        aoaBuilding.push(participantHeader);
+        // Insert summary row
+        const summaryRow = Array(headerTop.length).fill('');
+        summaryRow[1] = building;
+        summaryRow[2] = participant;
+        aoaBuilding.push(summaryRow);
       }
       prevParticipant = participant;
       prevSection = section;
-
       // Build row as before
       const row = [];
       for (let i = 0; i < leftCols.length; i++) {
@@ -1633,82 +1671,84 @@ function exportCurrentPivotToExcel() {
       }
       aoaBuilding.push(row);
     }
-
     // Create worksheet for this building
     const wsBuilding = XLSX.utils.aoa_to_sheet(aoaBuilding);
-    wsBuilding['!rows'] = wsBuilding['!rows'] || [];
-    // --- Apply custom styles matching screenshot ---
-    const GRAY_HEADER = 'FFD9D9D9';
-    const ORANGE_HEADER = 'FFFF9900';
-    const GREEN = 'FF1CA45C';
-    const RED = 'FFCC0000';
-    // Left header columns (A-E): gray fill, bold, green font
-    for (let c = 0; c < leftCols.length; c++) {
-      const addrTop = XLSX.utils.encode_cell({ r: HEADER_TOP_ROW, c });
-      const addrSub = XLSX.utils.encode_cell({ r: HEADER_SUB_ROW, c });
-      if (wsBuilding[addrTop]) wsBuilding[addrTop].s = { font: { bold: true, color: { rgb: GREEN } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
-      if (wsBuilding[addrSub]) wsBuilding[addrSub].s = { font: { bold: true, color: { rgb: GREEN } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
-    }
-    // Stage headers (F4+G4, H4+I4, ...): orange fill, bold, white font
-    for (let i = 0; i < stages.length; i++) {
-      const startCol = leftCols.length + i * metricCount;
-      const endCol = startCol + metricCount - 1;
-      for (let c = startCol; c <= endCol; c++) {
-        const addrTop = XLSX.utils.encode_cell({ r: HEADER_TOP_ROW, c });
-        if (wsBuilding[addrTop]) wsBuilding[addrTop].s = { font: { bold: true, color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: ORANGE_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
-      }
-    }
-    // Metric subheaders (F5, G5, ...): gray fill, bold, black font
-    for (let c = leftCols.length; c < headerTop.length; c++) {
-      const addrSub = XLSX.utils.encode_cell({ r: HEADER_SUB_ROW, c });
-      if (wsBuilding[addrSub]) wsBuilding[addrSub].s = { font: { bold: true, color: { rgb: 'FF000000' } }, fill: { patternType: 'solid', fgColor: { rgb: GRAY_HEADER } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: BORDER_THIN_BLACK };
-    }
-    // Data and group label styles
-    const participantColIdx = leftCols.findIndex(c => c.key.toLowerCase() === 'participant');
-    const sectionColIdx = leftCols.findIndex(c => c.key.toLowerCase() === 'section');
-    // Define a light green for all data rows
-    const LIGHT_GREEN = 'FFB6EFD3'; // pastel green, adjust as needed
-    // Only horizontal borders (top and bottom)
-    const BORDER_HORIZONTAL = {
-      top: { style: 'thin', color: { rgb: 'FF1CA45C' } },
-      bottom: { style: 'thin', color: { rgb: 'FF1CA45C' } }
-    };
-    for (let r = HEADER_SUB_ROW + 1; r < aoaBuilding.length; r++) {
-      const isGroupLabel = (
-        (participantColIdx >= 0 && wsBuilding[XLSX.utils.encode_cell({ r, c: participantColIdx })]?.v) ||
-        (sectionColIdx >= 0 && wsBuilding[XLSX.utils.encode_cell({ r, c: sectionColIdx })]?.v)
-      );
+    wsBuilding['!cols'] = ws['!cols'];
+    // Style header, summary, and data rows
+    for (let r = 0; r < aoaBuilding.length; r++) {
       for (let c = 0; c < headerTop.length; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = wsBuilding[addr];
         if (!cell) continue;
-        if (isGroupLabel) {
-          // Bold, green group label (keep full border for group label)
-          cell.s = { font: { bold: true, color: { rgb: GREEN } }, alignment: { horizontal: 'left', vertical: 'center' }, border: BORDER_THIN_BLACK };
-        } else {
-          // All data rows: light green text, only horizontal borders
-          cell.s = {
-            font: { color: { rgb: LIGHT_GREEN } },
-            alignment: { horizontal: c >= leftCols.length ? 'right' : 'left', vertical: 'top' },
-            border: BORDER_HORIZONTAL,
-            ...(c >= leftCols.length ? { numFmt: '0.0' } : {})
+        // Title
+        if (r % 6 === 0) cell.s = STYLE_TITLE;
+        // Timestamp
+        else if (r % 6 === 1) cell.s = STYLE_GENERATED;
+        // Header rows (only repeated headers get fill)
+        else if (r % 6 === 3) {
+          // Green header for left columns, orange for stage columns
+          if (c < leftCount) cell.s = STYLE_HDR_GREEN;
+          else if (c >= leftCount && c < headerTop.length) cell.s = STYLE_HDR_ORANGE;
+        }
+        else if (r % 6 === 4) {
+          // Green header for left columns, gray for metric subheaders
+          if (c < leftCount) cell.s = STYLE_HDR_GREEN;
+          else if (c >= leftCount && c < headerTop.length) cell.s = {
+            font: { bold: true, color: { rgb: 'FF000000' } },
+            fill: { patternType: 'solid', fgColor: { rgb: GRAY } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: BORDER_THIN,
           };
+        }
+        // Summary row
+        else if (r % 6 === 5) cell.s = c <= 2 ? STYLE_SUMMARY_LABEL : STYLE_SUMMARY;
+        // Group/section label rows (detect by green bold text in left columns)
+        else if (c < leftCount && cell.v && typeof cell.v === 'string' && cell.v.trim() && (cell.v === 'Android' || cell.v === 'Both' || cell.v === 'iOS' || cell.v === 'Results' || cell.v === 'Location Technology' || cell.v === 'Handset' || cell.v === 'Point ID' || cell.v === 'Path')) {
+          cell.s = STYLE_GROUP_LABEL;
+        }
+        // Data rows
+        else {
+          const isMetric = c >= leftCount;
+          const stageIdx = isMetric ? Math.floor((c - leftCount) / metricCount) : -1;
+          const stageName = isMetric && stages[stageIdx] ? String(stages[stageIdx]).toLowerCase() : '';
+          if (isMetric && (stageName.includes('1d') || stageName.includes('za'))) {
+            cell.s = STYLE_STAGE_RED;
+          } else {
+            cell.s = isMetric ? STYLE_NUM : STYLE_TEXT;
+          }
         }
       }
     }
-    // Merge headers as before
+    // Merge timestamp row
     wsBuilding['!merges'] = wsBuilding['!merges'] || [];
+    wsBuilding['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: headerTop.length - 1 } });
+    // Merge left headers
     for (let c = 0; c < leftCols.length; c++) {
-      wsBuilding['!merges'].push({ s: { r: HEADER_TOP_ROW, c }, e: { r: HEADER_SUB_ROW, c } });
+      wsBuilding['!merges'].push({ s: { r: 3, c }, e: { r: 4, c } });
     }
     for (let i = 0; i < stages.length; i++) {
       const startCol = leftCols.length + i * metricCount;
       const endCol = startCol + metricCount - 1;
       if (endCol > startCol) {
-        wsBuilding['!merges'].push({ s: { r: HEADER_TOP_ROW, c: startCol }, e: { r: HEADER_TOP_ROW, c: endCol } });
+        wsBuilding['!merges'].push({ s: { r: 3, c: startCol }, e: { r: 3, c: endCol } });
       }
     }
-    // Set worksheet name to building ID (or 'Building' if missing)
+    // Add a black border around the entire data region
+    const borderRange = { s: { r: 3, c: 0 }, e: { r: aoaBuilding.length - 1, c: headerTop.length - 1 } };
+    for (let r = borderRange.s.r; r <= borderRange.e.r; r++) {
+      for (let c = borderRange.s.c; c <= borderRange.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = wsBuilding[addr];
+        if (!cell) continue;
+        cell.s = cell.s || {};
+        cell.s.border = {
+          top:   { style: 'thin', color: { rgb: 'FF000000' } },
+          bottom:{ style: 'thin', color: { rgb: 'FF000000' } },
+          left:  { style: 'thin', color: { rgb: 'FF000000' } },
+          right: { style: 'thin', color: { rgb: 'FF000000' } },
+        };
+      }
+    }
     let sheetName = String(building || 'Building');
     if (!sheetName.trim()) sheetName = 'Building';
     XLSX.utils.book_append_sheet(wb, wsBuilding, sheetName);
