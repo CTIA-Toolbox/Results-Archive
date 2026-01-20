@@ -5,25 +5,25 @@ const BORDER_THIN = {
   left: { style: 'thin', color: { rgb: 'FF000000' } },
   right: { style: 'thin', color: { rgb: 'FF000000' } },
 };
-const STYLE_LEFTCOLS = {
-  font: { name: 'Calibri', sz: 11, color: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'left', vertical: 'top' },
-  border: BORDER_THIN,
-};
 const STYLE_HEADER = {
-  font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
   fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
   alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
   border: BORDER_THIN,
 };
 const STYLE_DATA_NUM = {
-  font: { color: { rgb: 'FFC00000' } },
+  font: { name: 'Calibri', sz: 10, color: { rgb: 'FFC00000' } },
   alignment: { horizontal: 'right', vertical: 'top' },
   border: BORDER_THIN,
   numFmt: '0.00',
 };
-const STYLE_DATA_TEXT = {
-  font: { color: { rgb: 'FF000000' } },
+const STYLE_LEFTCOLS = {
+  font: { name: 'Calibri', sz: 11, color: { rgb: 'FF1CA45C' } },
+  alignment: { horizontal: 'left', vertical: 'top' },
+  border: BORDER_THIN,
+};
+const STYLE_IDENTIFIER = {
+  font: { name: 'Calibri', sz: 11, color: { rgb: 'FF000000' } },
   alignment: { horizontal: 'left', vertical: 'top' },
   border: BORDER_THIN,
 };
@@ -1567,16 +1567,25 @@ function exportCurrentPivotToExcel() {
   // Data rows
   for (let r = 5; r <= lastRow; r++) {
     for (let c = 0; c <= lastCol; c++) {
-      const isMetric = c >= leftCount;
-      const stageIdx = isMetric ? Math.floor((c - leftCount) / metricCount) : -1;
-      const stageName = isMetric && stages[stageIdx] ? String(stages[stageIdx]).toLowerCase() : '';
       const addr = XLSX.utils.encode_cell({ r, c });
       if (!ws[addr]) continue;
-      if (isMetric && (stageName.includes('1d') || stageName.includes('za'))) {
-        ws[addr].s = STYLE_STAGE_RED;
-      } else {
-        ws[addr].s = isMetric ? STYLE_DATA_NUM : STYLE_DATA_TEXT;
+      // Column E (index 4): Calibri, 11, black (not header)
+      if (c === 4) {
+        ws[addr].s = STYLE_IDENTIFIER;
+        continue;
       }
+      // Columns A-D (0-3): Calibri, 11, green (not header)
+      if (c >= 0 && c <= 3) {
+        ws[addr].s = STYLE_LEFTCOLS;
+        continue;
+      }
+      // All numerical values: Calibri, 10, red
+      if (!isNaN(Number(ws[addr].v)) && ws[addr].v !== '') {
+        ws[addr].s = STYLE_DATA_NUM;
+        continue;
+      }
+      // Default: no fill, Calibri, 11, black
+      ws[addr].s = STYLE_IDENTIFIER;
     }
   }
 
