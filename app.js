@@ -1529,18 +1529,24 @@ function exportCurrentPivotToExcel() {
       return { rowId, participant, section, meta };
     });
     buildingRows.sort((a, b) => {
+      // Sort by participant first
       if (a.participant !== b.participant) return String(a.participant).localeCompare(String(b.participant));
-      // Group by Section (SECTION_ORDER), then by OS, then by Identifier, then by any other fields as fallback
+      // Strictly group by Section using SECTION_ORDER
       const aIdx = SECTION_ORDER.indexOf(a.section);
       const bIdx = SECTION_ORDER.indexOf(b.section);
-      if (aIdx !== -1 && bIdx !== -1 && aIdx !== bIdx) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
-      // If section is the same, sort by OS, then Identifier, then fallback to stringified meta
-      if (a.section !== b.section) return String(a.section).localeCompare(String(b.section));
+      if (aIdx !== -1 && bIdx !== -1) {
+        if (aIdx !== bIdx) return aIdx - bIdx;
+      } else if (aIdx !== -1) {
+        return -1;
+      } else if (bIdx !== -1) {
+        return 1;
+      } else {
+        // If both sections are not in SECTION_ORDER, sort alphabetically
+        if (a.section !== b.section) return String(a.section).localeCompare(String(b.section));
+      }
+      // Within each section, sort by OS, then Identifier, then rowId
       if (a.meta.OS && b.meta.OS && a.meta.OS !== b.meta.OS) return String(a.meta.OS).localeCompare(String(b.meta.OS));
       if (a.meta.Identifier && b.meta.Identifier && a.meta.Identifier !== b.meta.Identifier) return String(a.meta.Identifier).localeCompare(String(b.meta.Identifier));
-      // Fallback: stable sort by rowId
       return String(a.rowId).localeCompare(String(b.rowId));
     });
     // Remove any nulls from buildingRows before iterating
@@ -1576,8 +1582,17 @@ function exportCurrentPivotToExcel() {
       for (let i = 0; i < leftCols.length; i++) {
         const key = leftCols[i].key;
         const val = meta[key];
-        // No duplicate removal: always show value
-        row.push(val);
+        // Only remove duplicates for Building and Participant columns
+        if (key.toLowerCase() === 'building' || key.toLowerCase() === 'participant') {
+          if (prevVals[i] === val) {
+            row.push('');
+          } else {
+            row.push(val);
+            prevVals[i] = val;
+          }
+        } else {
+          row.push(val);
+        }
       }
       for (const s of stages) {
         const rowMap = pivot.matrix?.get(rowId);
