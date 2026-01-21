@@ -1602,6 +1602,8 @@ function exportCurrentPivotToExcel() {
             row.push(val);
             prevVals[i] = val;
           }
+        } else if (key.toLowerCase() === 'os') {
+          row.push(val); // always show OS, no suppression
         } else {
           row.push(val);
         }
