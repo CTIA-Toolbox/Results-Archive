@@ -1526,22 +1526,25 @@ function exportCurrentPivotToExcel() {
       const meta = pivot.rowMeta?.get(rowId) ?? {};
       const participant = meta['Participant'] || meta['participant'] || meta[leftCols.find(c => c.key.toLowerCase() === 'participant')?.key];
       const section = meta['Section'] || meta['section'] || meta[leftCols.find(c => c.key.toLowerCase() === 'section')?.key];
-      return { rowId, participant, section, meta };
+      // Only include rows with section in SECTION_ORDER
+      return SECTION_ORDER.includes(section) ? { rowId, participant, section, meta } : null;
     });
     buildingRows.sort((a, b) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
       if (a.participant !== b.participant) return String(a.participant).localeCompare(String(b.participant));
+      // Enforce strict SECTION_ORDER only
       const aIdx = SECTION_ORDER.indexOf(a.section);
       const bIdx = SECTION_ORDER.indexOf(b.section);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
-      return String(a.section).localeCompare(String(b.section));
+      return aIdx - bIdx;
     });
     let prevParticipant = null;
     let prevSection = null;
     let prevVals = new Array(leftCols.length).fill(undefined);
     let headerAdded = false;
     for (const { rowId, participant, section, meta } of buildingRows) {
+        if (!rowId) continue; // skip rows not in SECTION_ORDER
       // Insert empty row between participant sections
       if (prevParticipant !== null && participant !== prevParticipant) {
         aoaBuilding.push(Array(headerTop.length).fill(''));
