@@ -1541,18 +1541,14 @@ function exportCurrentPivotToExcel() {
       group.sort((a, b) => {
         const aIdx = SECTION_ORDER.indexOf(a.section);
         const bIdx = SECTION_ORDER.indexOf(b.section);
-        if (aIdx !== -1 && bIdx !== -1) {
-          if (aIdx !== bIdx) return aIdx - bIdx;
-        } else if (aIdx !== -1) {
-          return -1;
-        } else if (bIdx !== -1) {
-          return 1;
-        } else {
-          if (a.section !== b.section) return String(a.section).localeCompare(String(b.section));
-        }
-        if (a.meta.OS && b.meta.OS && a.meta.OS !== b.meta.OS) return String(a.meta.OS).localeCompare(String(b.meta.OS));
-        if (a.meta.Identifier && b.meta.Identifier && a.meta.Identifier !== b.meta.Identifier) return String(a.meta.Identifier).localeCompare(String(b.meta.Identifier));
-        return String(a.rowId).localeCompare(String(b.rowId));
+
+        // Primary: section order
+        const aRank = aIdx === -1 ? 999 : aIdx;
+        const bRank = bIdx === -1 ? 999 : bIdx;
+        if (aRank !== bRank) return aRank - bRank;
+
+        // Secondary: preserve original order within the section
+        return a.rowId - b.rowId;
       });
       sortedRows.push(...group);
     });
