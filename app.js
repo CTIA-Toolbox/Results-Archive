@@ -1443,6 +1443,7 @@ function exportCurrentPivotToExcel() {
     ? sortRowIdsByRowKeys(pivot.rows, pivot, {
       preferredOrderByKey: {
         [state.dimCols.row_type]: SECTION_ORDER,
+        OS: ['*'], // treat all OS values as equal, disables OS-based sorting
       },
     })
     : pivot.rows;
