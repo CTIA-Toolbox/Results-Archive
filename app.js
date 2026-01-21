@@ -1589,16 +1589,24 @@ function exportCurrentPivotToExcel() {
     // Create worksheet for this building
     const wsBuilding = XLSX.utils.aoa_to_sheet(aoaBuilding);
     wsBuilding['!cols'] = ws['!cols'];
-    // Only style header rows
+    // Only style true header rows (headerTop/headerSub) in each block
+    // Find all header row indices (rows that match headerTop or headerSub exactly)
+    const headerRowIndices = [];
     for (let r = 0; r < aoaBuilding.length; r++) {
+      const row = aoaBuilding[r];
+      if (
+        Array.isArray(row) &&
+        (row.join('|||') === headerTop.join('|||') || row.join('|||') === headerSub.join('|||'))
+      ) {
+        headerRowIndices.push(r);
+      }
+    }
+    for (const r of headerRowIndices) {
       for (let c = 0; c < headerTop.length; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = wsBuilding[addr];
         if (!cell) continue;
-        // Only style header rows (row 3 and 4 in each block)
-        if (r % 6 === 3 || r % 6 === 4) {
-          cell.s = STYLE_HEADER;
-        }
+        cell.s = STYLE_HEADER;
       }
     }
     // Merge timestamp row
