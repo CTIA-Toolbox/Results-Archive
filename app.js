@@ -1,3 +1,7 @@
+    // Style for 80% values (just red)
+    const STYLE_80PCT_RED = {
+      font: { color: { rgb: 'FFC00000' } },
+    };
     // --- Style application helper (must be defined before use) ---
     // ...existing code...
   // --- Style application helper (must be defined before use) ---
@@ -1533,6 +1537,10 @@ function exportCurrentPivotToExcel() {
     let prevVals = new Array(leftCols.length).fill(undefined);
     let headerAdded = false;
     for (const { rowId, participant, section, meta } of buildingRows) {
+      // Insert empty row between participant sections
+      if (prevParticipant !== null && participant !== prevParticipant) {
+        aoaBuilding.push(Array(headerTop.length).fill(''));
+      }
       // Insert blank row and bolded header for new section
       if (prevSection !== null && section !== prevSection) {
         aoaBuilding.push(Array(headerTop.length).fill(''));
@@ -1629,9 +1637,18 @@ function exportCurrentPivotToExcel() {
     }
     // Freeze header rows so they remain visible when scrolling
     wsBuilding['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: 0, ySplit: 5, topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 0 }), activePane: 'bottomLeft' } }];
-    // Add a black border around the entire data region
+    // Find column indices for 'Hor 80%' and 'Ver 80%' in headerSub
+    const eightyColIndices = [];
+    for (let c = 0; c < headerTop.length; c++) {
+      if (headerSub[c] && (headerSub[c].toLowerCase().includes('hor 80%') || headerSub[c].toLowerCase().includes('ver 80%'))) {
+        eightyColIndices.push(c);
+      }
+    }
+    // Add a black border and apply red style to 80% columns in data rows
     const borderRange = { s: { r: 3, c: 0 }, e: { r: aoaBuilding.length - 1, c: headerTop.length - 1 } };
     for (let r = borderRange.s.r; r <= borderRange.e.r; r++) {
+      // Only apply red style to data rows (not headerTop/headerSub)
+      const isHeader = headerRowIndices.includes(r);
       for (let c = borderRange.s.c; c <= borderRange.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = wsBuilding[addr];
@@ -1643,6 +1660,10 @@ function exportCurrentPivotToExcel() {
           left:  { style: 'thin', color: { rgb: 'FF000000' } },
           right: { style: 'thin', color: { rgb: 'FF000000' } },
         };
+        // Apply red font to 80% columns in data rows only
+        if (!isHeader && eightyColIndices.includes(c)) {
+          cell.s.font = { ...(cell.s.font || {}), color: { rgb: 'FFC00000' } };
+        }
       }
     }
     let sheetName = String(building || 'Building');
