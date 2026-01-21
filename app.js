@@ -1532,20 +1532,14 @@ function exportCurrentPivotToExcel() {
     let prevSection = null;
     let prevVals = new Array(leftCols.length).fill(undefined);
     for (const { rowId, participant, section, meta } of buildingRows) {
-      // Insert header and summary row for new participant
+      // Insert header rows before each participant section (no summary row)
       if (prevParticipant !== null && participant !== prevParticipant) {
         aoaBuilding.push(Array(headerTop.length).fill(''));
-        // Insert header rows before each participant section
         aoaBuilding.push([...titleRow]);
         aoaBuilding.push([...generatedRow]);
         aoaBuilding.push([...spacerRow]);
         aoaBuilding.push([...headerTop]);
         aoaBuilding.push([...headerSub]);
-        // Insert summary row
-        const summaryRow = Array(headerTop.length).fill('');
-        summaryRow[1] = building;
-        summaryRow[2] = participant;
-        aoaBuilding.push(summaryRow);
       }
       // Insert blank row and bolded header for new section
       if (prevSection !== null && section !== prevSection) {
@@ -1554,18 +1548,13 @@ function exportCurrentPivotToExcel() {
         sectionHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'section')] = section;
         aoaBuilding.push(sectionHeader);
       }
-      // If this is the very first participant, insert the header at the top
+      // If this is the very first participant, insert the header at the top (no summary row)
       if (prevParticipant === null) {
         aoaBuilding.push([...titleRow]);
         aoaBuilding.push([...generatedRow]);
         aoaBuilding.push([...spacerRow]);
         aoaBuilding.push([...headerTop]);
         aoaBuilding.push([...headerSub]);
-        // Insert summary row
-        const summaryRow = Array(headerTop.length).fill('');
-        summaryRow[1] = building;
-        summaryRow[2] = participant;
-        aoaBuilding.push(summaryRow);
       }
       prevParticipant = participant;
       prevSection = section;
