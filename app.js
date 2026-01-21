@@ -1,3 +1,5 @@
+    // --- Style application helper (must be defined before use) ---
+    // ...existing code...
   // --- Style application helper (must be defined before use) ---
   const applyStyle = (r, c, style) => {
     const addr = XLSX.utils.encode_cell({ r, c });
@@ -20,90 +22,7 @@ const STYLE_HEADER = {
   alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
   border: BORDER_THIN,
 };
-const STYLE_DATA_NUM = {
-  font: { name: 'Calibri', sz: 10, color: { rgb: 'FFC00000' } },
-  alignment: { horizontal: 'right', vertical: 'top' },
-  border: BORDER_THIN,
-  numFmt: '0.00',
-};
-const STYLE_LEFTCOLS = {
-  font: { name: 'Calibri', sz: 11, color: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'left', vertical: 'top' },
-  border: BORDER_THIN,
-};
-const STYLE_IDENTIFIER = {
-  font: { name: 'Calibri', sz: 11, color: { rgb: 'FF000000' } },
-  alignment: { horizontal: 'left', vertical: 'top' },
-  border: BORDER_THIN,
-};
-const STYLE_TITLE = {
-  font: { name: 'Calibri', sz: 14, bold: true, color: { rgb: 'FF1F4E78' } },
-  alignment: { horizontal: 'center', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_GENERATED = {
-  font: { italic: true },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
-  alignment: { horizontal: 'center', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_SUMMARY = {
-  font: { bold: true, color: { rgb: 'FF1CA45C' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FFF2F2F2' } },
-  alignment: { horizontal: 'right', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_SUMMARY_LABEL = {
-  font: { bold: true, color: { rgb: 'FF1CA45C' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FFF2F2F2' } },
-  alignment: { horizontal: 'left', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_GROUP_LABEL = {
-  font: { bold: true, color: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'left', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_TEXT = {
-  font: { color: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'left', vertical: 'top' },
-  border: BORDER_THIN,
-};
-const STYLE_NUM = {
-  font: { color: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'right', vertical: 'top' },
-  border: BORDER_THIN,
-  numFmt: '0.00',
-};
-const STYLE_HDR = {
-  font: { bold: true, color: { rgb: 'FFFFFFFF' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
-  alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-  border: BORDER_THIN,
-};
-const STYLE_HDR_GREEN = {
-  font: { bold: true, color: { rgb: 'FF1CA45C' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FF1CA45C' } },
-  alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-  border: BORDER_THIN,
-};
-const STYLE_HDR_ORANGE = {
-  font: { bold: true, color: { rgb: 'FFFF9900' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FFFF9900' } },
-  alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-  border: BORDER_THIN,
-};
-const STYLE_TIMESTAMP = {
-  font: { italic: true },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } },
-  alignment: { horizontal: 'center', vertical: 'center' },
-  border: BORDER_THIN,
-};
-const STYLE_STAGE_RED = {
-  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFC00000' } },
-  alignment: { horizontal: 'center', vertical: 'center' },
-  border: BORDER_THIN,
-};
+// ...all other style definitions removed...
 // Ensure all imports use correct relative paths
 window.addEventListener('error', function(event) {
   console.error('[GLOBAL ERROR HANDLER]', event.message, event.filename, event.lineno, event.colno, event.error);
@@ -1555,25 +1474,8 @@ function exportCurrentPivotToExcel() {
   const topLeftCell = XLSX.utils.encode_cell({ r: ySplit, c: leftCount });
   ws['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: leftCount, ySplit, topLeftCell, activePane: 'bottomRight' } }];
 
-  // --- Apply styles using applyStyle only ---
-  // Title row
-  for (let c = 0; c <= lastCol; c++) applyStyle(0, c, STYLE_TITLE);
-  // Generated row
-  for (let c = 0; c <= lastCol; c++) applyStyle(1, c, STYLE_GENERATED);
-  // Header rows (row 3, 4)
-  for (let r = 3; r <= 4; r++) for (let c = 0; c <= lastCol; c++) applyStyle(r, c, STYLE_HDR);
-  // Data rows
-  for (let r = 5; r <= lastRow; r++) {
-    for (let c = 0; c <= lastCol; c++) {
-      if (c === 4) {
-        applyStyle(r, c, STYLE_IDENTIFIER);
-      } else if (c >= 0 && c <= 3) {
-        applyStyle(r, c, STYLE_LEFTCOLS);
-      } else if (!isNaN(Number(ws[XLSX.utils.encode_cell({ r, c })]?.v)) && ws[XLSX.utils.encode_cell({ r, c })]?.v !== '') {
-        applyStyle(r, c, STYLE_DATA_NUM);
-      }
-    }
-  }
+  // --- Only apply header style ---
+  for (let r = 3; r <= 4; r++) for (let c = 0; c <= lastCol; c++) applyStyle(r, c, STYLE_HEADER);
 
   
 
@@ -1688,48 +1590,15 @@ function exportCurrentPivotToExcel() {
     // Create worksheet for this building
     const wsBuilding = XLSX.utils.aoa_to_sheet(aoaBuilding);
     wsBuilding['!cols'] = ws['!cols'];
-    // Style header, summary, and data rows
+    // Only style header rows
     for (let r = 0; r < aoaBuilding.length; r++) {
       for (let c = 0; c < headerTop.length; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = wsBuilding[addr];
         if (!cell) continue;
-        // Title
-        if (r % 6 === 0) cell.s = STYLE_TITLE;
-        // Timestamp
-        else if (r % 6 === 1) cell.s = STYLE_GENERATED;
-        // Header rows (only repeated headers get fill)
-        else if (r % 6 === 3) {
-          // Green header for left columns, orange for stage columns
-          if (c < leftCount) cell.s = STYLE_HDR_GREEN;
-          else if (c >= leftCount && c < headerTop.length) cell.s = STYLE_HDR_ORANGE;
-        }
-        else if (r % 6 === 4) {
-          // Green header for left columns, gray for metric subheaders
-          if (c < leftCount) cell.s = STYLE_HDR_GREEN;
-          else if (c >= leftCount && c < headerTop.length) cell.s = {
-            font: { bold: true, color: { rgb: 'FF000000' } },
-            fill: { patternType: 'solid', fgColor: { rgb: GRAY } },
-            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-            border: BORDER_THIN,
-          };
-        }
-        // Summary row
-        else if (r % 6 === 5) cell.s = c <= 2 ? STYLE_SUMMARY_LABEL : STYLE_SUMMARY;
-        // Group/section label rows (detect by green bold text in left columns)
-        else if (c < leftCount && cell.v && typeof cell.v === 'string' && cell.v.trim() && (cell.v === 'Android' || cell.v === 'Both' || cell.v === 'iOS' || cell.v === 'Results' || cell.v === 'Location Technology' || cell.v === 'Handset' || cell.v === 'Point ID' || cell.v === 'Path')) {
-          cell.s = STYLE_GROUP_LABEL;
-        }
-        // Data rows
-        else {
-          const isMetric = c >= leftCount;
-          const stageIdx = isMetric ? Math.floor((c - leftCount) / metricCount) : -1;
-          const stageName = isMetric && stages[stageIdx] ? String(stages[stageIdx]).toLowerCase() : '';
-          if (isMetric && (stageName.includes('1d') || stageName.includes('za'))) {
-            cell.s = STYLE_STAGE_RED;
-          } else {
-            cell.s = isMetric ? STYLE_NUM : STYLE_TEXT;
-          }
+        // Only style header rows (row 3 and 4 in each block)
+        if (r % 6 === 3 || r % 6 === 4) {
+          cell.s = STYLE_HEADER;
         }
       }
     }
