@@ -1394,7 +1394,7 @@ async function exportCallsToKml() {
 
 function exportCurrentPivotToExcel() {
     // ...existing code...
-  console.log("rowHeaderCols at export:", rowHeaderCols);
+  
   const XLSX = window.XLSX;
   if (!XLSX) {
     setStatus('Excel export library not loaded yet. Please refresh and try again.', { error: true });
@@ -1403,6 +1403,7 @@ function exportCurrentPivotToExcel() {
 
   const pivot = state.lastPivot;
   const rowHeaderCols = state.lastRowHeaderCols;
+  console.log("rowHeaderCols at export:", rowHeaderCols);
   if (!pivot || !Array.isArray(pivot.cols) || !Array.isArray(pivot.rows) || !rowHeaderCols) {
     setStatus('Nothing to export yet (load data + select building(s)).', { error: true });
     return;
