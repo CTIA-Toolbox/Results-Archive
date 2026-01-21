@@ -1560,6 +1560,7 @@ function exportCurrentPivotToExcel() {
       // Insert empty row between participant sections
       if (prevParticipant !== null && participant !== prevParticipant) {
         aoaBuilding.push(Array(headerTop.length).fill(''));
+        prevVals = new Array(leftCols.length).fill(undefined);   // <-- add this
       }
       // Insert blank row and bolded header for new section
       if (prevSection !== null && section !== prevSection) {
@@ -1567,6 +1568,7 @@ function exportCurrentPivotToExcel() {
         const sectionHeader = Array(leftCols.length).fill('');
         sectionHeader[leftCols.findIndex(c => c.key.toLowerCase() === 'section')] = section;
         aoaBuilding.push(sectionHeader);
+        prevVals = new Array(leftCols.length).fill(undefined);   // <-- add this
       }
       // If this is the very first row, insert the header at the top (no summary row)
       if (!headerAdded) {
