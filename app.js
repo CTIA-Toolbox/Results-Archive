@@ -1498,8 +1498,6 @@ function exportCurrentPivotToExcel() {
     cell.s = { ...(cell.s || {}), ...(style || {}) };
   };
 
-  // --- Only apply header style ---
-  for (let r = 3; r <= 4; r++) for (let c = 0; c <= lastCol; c++) applyStyle(r, c, STYLE_HEADER);
 
 
   const wb = XLSX.utils.book_new();
