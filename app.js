@@ -1464,30 +1464,47 @@ function exportCurrentPivotToExcel() {
   for (const rowId of exportRowIds) {
     const meta = pivot.rowMeta?.get(rowId) ?? {};
     const row = [];
-    // Fill left columns, blanking repeats
+    // Determine indices for group keys
+    const buildingIndex = leftCols.findIndex(c => c.key === state.dimCols.building);
+    const sectionIndex  = leftCols.findIndex(c => c.key === state.dimCols.row_type);
+
+    // Detect group boundaries
+    const buildingChanged = buildingIndex >= 0 && meta[state.dimCols.building] !== prevVals[buildingIndex];
+    const sectionChanged  = sectionIndex  >= 0 && meta[state.dimCols.row_type]  !== prevVals[sectionIndex];
+
+    // Reset duplicate suppression when groups change
+    if (buildingChanged) {
+      // New building → reset everything
+      prevVals.fill(undefined);
+    } else if (sectionChanged) {
+      // New section → reset section only
+      prevVals[sectionIndex] = undefined;
+    }
+
+    // Fill left columns with selective duplicate suppression
     for (let i = 0; i < leftCols.length; i++) {
-    const key = leftCols[i].key;
-    const val = meta[key];
+      const key = leftCols[i].key;
+      const val = meta[key];
 
-    // Duplicate suppression only for Building, Participant, Section
-    const suppress =
-      key === state.dimCols.building ||
-      key === state.dimCols.participant ||
-      key === state.dimCols.row_type;
+      // Only suppress duplicates for Building, Participant, Section
+      const suppress =
+        key === state.dimCols.building ||
+        key === state.dimCols.participant ||
+        key === state.dimCols.row_type;
 
-    if (suppress) {
-      if (prevVals[i] === val) {
-        row.push('');
+      if (suppress) {
+        if (prevVals[i] === val) {
+          row.push('');
+        } else {
+          row.push(val);
+          prevVals[i] = val;
+        }
       } else {
+        // Always show OS and Identifier
         row.push(val);
         prevVals[i] = val;
       }
-    } else {
-      // Always show OS and Identifier
-      row.push(val);
-      prevVals[i] = val;
     }
-  }
     // Fill metric columns for each stage (mirroring grid)
     for (const s of stages) {
       const rowMap = pivot.matrix?.get(rowId);
