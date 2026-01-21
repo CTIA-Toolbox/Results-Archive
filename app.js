@@ -1521,7 +1521,7 @@ function exportCurrentPivotToExcel() {
   }
   for (const building of Object.keys(buildingGroups)) {
     let aoaBuilding = [];
-    const SECTION_ORDER = ['Results', 'Location Technology', 'Handset', 'Path', 'Point'];
+    const SECTION_ORDER = ['Results', 'Location Technology', 'Handset', 'Point', 'Path'];
     const buildingRows = buildingGroups[building].map(rowId => {
       const meta = pivot.rowMeta?.get(rowId) ?? {};
       const participant = meta['Participant'] || meta['participant'] || meta[leftCols.find(c => c.key.toLowerCase() === 'participant')?.key];
