@@ -1,3 +1,7 @@
+    // Style for left columns in data rows (light green font, no fill)
+    const STYLE_LEFTCOL_GREEN = {
+      font: { color: { rgb: GREEN } },
+    };
     // Style for 80% values (just red)
     const STYLE_80PCT_RED = {
       font: { color: { rgb: 'FFC00000' } },
@@ -1646,8 +1650,12 @@ function exportCurrentPivotToExcel() {
     }
     // Add a black border and apply red style to 80% columns in data rows
     const borderRange = { s: { r: 3, c: 0 }, e: { r: aoaBuilding.length - 1, c: headerTop.length - 1 } };
+    // Find column indices for left columns: Building, Participant, OS, Section
+    const leftColNames = ['Building', 'Participant', 'OS', 'Section'];
+    const leftColIndices = leftColNames.map(name => headerTop.findIndex(h => h.toLowerCase() === name.toLowerCase())).filter(idx => idx !== -1);
+
     for (let r = borderRange.s.r; r <= borderRange.e.r; r++) {
-      // Only apply red style to data rows (not headerTop/headerSub)
+      // Only apply styles to data rows (not headerTop/headerSub)
       const isHeader = headerRowIndices.includes(r);
       for (let c = borderRange.s.c; c <= borderRange.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
@@ -1663,6 +1671,10 @@ function exportCurrentPivotToExcel() {
         // Apply red font to 80% columns in data rows only
         if (!isHeader && eightyColIndices.includes(c)) {
           cell.s.font = { ...(cell.s.font || {}), color: { rgb: 'FFC00000' } };
+        }
+        // Apply green font to left columns in data rows only
+        if (!isHeader && leftColIndices.includes(c)) {
+          cell.s.font = { ...(cell.s.font || {}), color: { rgb: GREEN } };
         }
       }
     }
