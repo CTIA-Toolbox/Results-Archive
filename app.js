@@ -1641,6 +1641,7 @@ function exportCurrentPivotToExcel() {
       }
     }
     // Freeze header rows so they remain visible when scrolling
+    // Freeze the top 5 rows (rows 0-4) so header is always visible
     wsBuilding['!sheetViews'] = [{ pane: { state: 'frozen', xSplit: 0, ySplit: 5, topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 0 }), activePane: 'bottomLeft' } }];
     // Find column indices for 'Hor 80%' and 'Ver 80%' in headerSub
     const eightyColIndices = [];
