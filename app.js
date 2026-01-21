@@ -9,6 +9,8 @@
   };
 // --- Color Palette ---
 const GRAY = 'FFD9D9D9';
+const GREEN = 'FF1CA45C';
+const ORANGE = 'FFFF9900';
 // --- Style Definitions (global) ---
 const BORDER_THIN = {
   top: { style: 'thin', color: { rgb: 'FF000000' } },
@@ -16,9 +18,23 @@ const BORDER_THIN = {
   left: { style: 'thin', color: { rgb: 'FF000000' } },
   right: { style: 'thin', color: { rgb: 'FF000000' } },
 };
-const STYLE_HEADER = {
-  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
-  fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
+// Style for left (gray+green) header
+const STYLE_HEADER_LEFT = {
+  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: GREEN } },
+  fill: { patternType: 'solid', fgColor: { rgb: GRAY } },
+  alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+  border: BORDER_THIN,
+};
+// Style for stage (orange) header
+const STYLE_HEADER_STAGE = {
+  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FF000000' } },
+  fill: { patternType: 'solid', fgColor: { rgb: ORANGE } },
+  alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+  border: BORDER_THIN,
+};
+// Style for subheader (bold black)
+const STYLE_HEADER_SUB = {
+  font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FF000000' } },
   alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
   border: BORDER_THIN,
 };
@@ -1602,11 +1618,19 @@ function exportCurrentPivotToExcel() {
       }
     }
     for (const r of headerRowIndices) {
+      const isTop = aoaBuilding[r].join('|||') === headerTop.join('|||');
+      const isSub = aoaBuilding[r].join('|||') === headerSub.join('|||');
       for (let c = 0; c < headerTop.length; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = wsBuilding[addr];
         if (!cell) continue;
-        cell.s = STYLE_HEADER;
+        if (isTop) {
+          // Left headers gray+green, stage headers orange
+          if (c < leftCols.length) cell.s = STYLE_HEADER_LEFT;
+          else cell.s = STYLE_HEADER_STAGE;
+        } else if (isSub) {
+          cell.s = STYLE_HEADER_SUB;
+        }
       }
     }
     // Merge timestamp row
