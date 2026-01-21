@@ -1,11 +1,15 @@
-    // Style for left columns in data rows (light green font, no fill)
-    const STYLE_LEFTCOL_GREEN = {
-      font: { color: { rgb: GREEN } },
-    };
-    // Style for 80% values (just red)
-    const STYLE_80PCT_RED = {
-      font: { color: { rgb: 'FFC00000' } },
-    };
+// --- Color Palette ---
+const GRAY = 'FFD9D9D9';
+const GREEN = 'FF1CA45C';
+const ORANGE = 'FFFF9900';
+// Style for left columns in data rows (light green font, no fill)
+const STYLE_LEFTCOL_GREEN = {
+  font: { color: { rgb: GREEN } },
+};
+// Style for 80% values (just red)
+const STYLE_80PCT_RED = {
+  font: { color: { rgb: 'FFC00000' } },
+};
     // --- Style application helper (must be defined before use) ---
     // ...existing code...
   // --- Style application helper (must be defined before use) ---
@@ -15,10 +19,7 @@
     if (!cell) return;
     cell.s = { ...(cell.s || {}), ...(style || {}) };
   };
-// --- Color Palette ---
-const GRAY = 'FFD9D9D9';
-const GREEN = 'FF1CA45C';
-const ORANGE = 'FFFF9900';
+// ...existing code...
 // --- Style Definitions (global) ---
 const BORDER_THIN = {
   top: { style: 'thin', color: { rgb: 'FF000000' } },
