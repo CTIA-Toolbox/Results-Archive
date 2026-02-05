@@ -608,12 +608,51 @@ console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
 
     const callRows = await loadDefaultCorrelationData();
     if (callRows && callRows.length > 0) {
-      // Convert callRows to a Blob and File-like object for onCallFileSelected
-      const callBlob = new Blob([JSON.stringify(callRows)], { type: 'application/json' });
-      const callFile = new File([callBlob], 'DefaultCorrelationData.json', { type: 'application/json' });
-      await onCallFileSelected(callFile);
+      initializeCallDataFromRows(callRows);
       console.log("Default call dataset loaded:", callRows.length, "rows");
     }
+// Initialize call data directly from an array of JS objects (bypassing pickle/pyodide)
+function initializeCallDataFromRows(rows) {
+  // rows is already an array of JS objects
+  // Reuse the same logic that runs after the pickle is converted to JSON
+  // This should match the post-processing in loadCallDatasetFromBytes
+  if (!Array.isArray(rows) || rows.length === 0) {
+    setStatus('No call data rows provided.');
+    callState.columns = [];
+    callState.dimCols = {};
+    callState.records = [];
+    callState.filteredRecords = [];
+    callState.lastFileInfo = null;
+    setCallsExportEnabled(false);
+    setCallsKmlExportEnabled(false);
+    updateCallLocationSourceButton && updateCallLocationSourceButton();
+    updateCallViewToggleButton && updateCallViewToggleButton();
+    updateSectionsVisibility && updateSectionsVisibility();
+    return;
+  }
+
+  // Infer columns from keys of first row
+  const columns = Object.keys(rows[0]);
+  callState.columns = columns;
+  callState.dimCols = guessCallDimensionColumns(columns);
+  callState.records = rows;
+  callState.filteredRecords = rows;
+  callState.lastFileInfo = { name: 'DefaultCorrelationData', size: rows.length, lastModified: Date.now(), type: 'application/json' };
+
+  recomputeKnownBuildings && recomputeKnownBuildings();
+  populateBuildingSelectOptions && populateBuildingSelectOptions();
+  syncBuildingSelectFromState && syncBuildingSelectFromState();
+  applyFilters && applyFilters();
+  buildFiltersUI && buildFiltersUI();
+  updateSectionsVisibility && updateSectionsVisibility();
+
+  setStatus(`Loaded call data: ${rows.length.toLocaleString()} rows.`);
+  setCallsExportEnabled(true);
+  setCallsKmlExportEnabled(canExportCallsKml && canExportCallsKml());
+  updateCallLocationSourceButton && updateCallLocationSourceButton();
+  updateCallViewToggleButton && updateCallViewToggleButton();
+  updateSectionsVisibility && updateSectionsVisibility();
+}
 
   } catch (err) {
     console.error("Auto-load failed:", err);
