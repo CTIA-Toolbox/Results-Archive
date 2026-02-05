@@ -19,6 +19,40 @@ const STYLE_80PCT_RED = {
     if (!cell) return;
     cell.s = { ...(cell.s || {}), ...(style || {}) };
   };
+
+// --- Load Default Building Results (Excel) ---
+async function loadDefaultBuildingResults() {
+  // Path to the default Building Results Excel file (relative to index.html)
+  const DEFAULT_BUILDING_RESULTS_FILE = 'BuildingFootprints.kml'; // Update to the correct Excel file if needed
+  const DEFAULT_BUILDING_RESULTS_XLSX = 'Building Results.xlsx'; // If the Excel file is named differently, update here
+  // Try .xlsx first, fallback to .xls if needed
+  const candidates = [DEFAULT_BUILDING_RESULTS_XLSX, 'Building Results.xls'];
+  let response, fileUrl;
+  for (const candidate of candidates) {
+    try {
+      response = await fetch(candidate);
+      if (response.ok) {
+        fileUrl = candidate;
+        break;
+      }
+    } catch (e) {
+      // Try next
+    }
+  }
+  if (!response || !response.ok) {
+    throw new Error('Could not fetch default Building Results Excel file.');
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const data = new Uint8Array(arrayBuffer);
+  const XLSX = window.XLSX;
+  if (!XLSX) throw new Error('XLSX library not loaded.');
+  const workbook = XLSX.read(data, { type: 'array' });
+  // Use the first sheet
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+  return rows;
+}
 // ...existing code...
 // --- Style Definitions (global) ---
 const BORDER_THIN = {
