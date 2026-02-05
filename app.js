@@ -100,6 +100,30 @@ const STYLE_80PCT_RED = {
 };
     // --- Style application helper (must be defined before use) ---
     // ...existing code...
+  // --- Load Default Correlation Data (Excel) ---
+  async function loadDefaultCorrelationData() {
+    // Path to the default Correlation file (relative to index.html)
+    const DEFAULT_CORRELATION_XLSX = 'Correlation All.xlsx';
+    try {
+      const response = await fetch(DEFAULT_CORRELATION_XLSX);
+      if (!response.ok) {
+        throw new Error('Could not fetch default Correlation All.xlsx file.');
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const XLSX = window.XLSX;
+      if (!XLSX) throw new Error('XLSX library not loaded.');
+      const workbook = XLSX.read(data, { type: 'array' });
+      // Use the first sheet
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      return rows;
+    } catch (err) {
+      console.error('Failed to load Correlation All.xlsx', err);
+      return [];
+    }
+  }
   // --- Style application helper (must be defined before use) ---
   const applyStyle = (r, c, style) => {
     const addr = XLSX.utils.encode_cell({ r, c });
