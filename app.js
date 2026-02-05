@@ -660,32 +660,7 @@ async function loadDefaultCorrelationData() {
 }
 try {
 
-(async () => {
-  try {
-    console.log("Auto-loading default datasets...");
 
-    const buildingRows = await loadDefaultBuildingResults();
-    if (buildingRows && buildingRows.length > 0) {
-      // Convert buildingRows to a Blob and File-like object for onFileSelected
-      const buildingBlob = new Blob([JSON.stringify(buildingRows)], { type: 'application/json' });
-      const buildingFile = new File([buildingBlob], 'DefaultBuildingResults.json', { type: 'application/json' });
-      await onFileSelected(buildingFile);
-      console.log("Default building dataset loaded:", buildingRows.length, "rows");
-    }
-
-    const callRows = await loadDefaultCorrelationData();
-    if (callRows && callRows.length > 0) {
-      // Convert callRows to a Blob and File-like object for onCallFileSelected
-      const callBlob = new Blob([JSON.stringify(callRows)], { type: 'application/json' });
-      const callFile = new File([callBlob], 'DefaultCorrelationData.json', { type: 'application/json' });
-      await onCallFileSelected(callFile);
-      console.log("Default call dataset loaded:", callRows.length, "rows");
-    }
-
-  } catch (err) {
-    console.error("Auto-load failed:", err);
-  }
-})();
   setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
   logDebug('app.js initialized (storage startup temporarily disabled).');
   console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
