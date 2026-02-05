@@ -627,7 +627,66 @@ console.log('REACHED 8: AFTER_STORAGE_STARTUP');
 
 // ...existing code...
 
+// Loads Building Results from the default Excel file
+async function loadDefaultBuildingResults() {
+  try {
+    const resp = await fetch('./Building Results.xlsx');
+    const buf = await resp.arrayBuffer();
+    const workbook = XLSX.read(buf, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    console.log("Loaded Building Results:", rows.length, "rows");
+    return rows;
+  } catch (err) {
+    console.error("Failed to load Building Results.xlsx", err);
+  }
+}
+
+// Loads Correlation Data from the default Excel file
+async function loadDefaultCorrelationData() {
+  try {
+    const resp = await fetch('./Correlation All.xlsx');
+    const buf = await resp.arrayBuffer();
+    const workbook = XLSX.read(buf, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    console.log("Loaded Correlation Data:", rows.length, "rows");
+    return rows;
+  } catch (err) {
+    console.error("Failed to load Correlation All.xlsx", err);
+  }
+}
 try {
+// Auto-load default datasets after DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    console.log("Auto-loading default datasets...");
+
+
+    const buildingRows = await loadDefaultBuildingResults();
+    if (buildingRows && buildingRows.length > 0) {
+      // Convert buildingRows to a Blob and File-like object for onFileSelected
+      const buildingBlob = new Blob([JSON.stringify(buildingRows)], { type: 'application/json' });
+      const buildingFile = new File([buildingBlob], 'DefaultBuildingResults.json', { type: 'application/json' });
+      await onFileSelected(buildingFile);
+      console.log("Default building dataset loaded:", buildingRows.length, "rows");
+    }
+
+    const callRows = await loadDefaultCorrelationData();
+    if (callRows && callRows.length > 0) {
+      // Convert callRows to a Blob and File-like object for onCallFileSelected
+      const callBlob = new Blob([JSON.stringify(callRows)], { type: 'application/json' });
+      const callFile = new File([callBlob], 'DefaultCorrelationData.json', { type: 'application/json' });
+      await onCallFileSelected(callFile);
+      console.log("Default call dataset loaded:", callRows.length, "rows");
+    }
+
+  } catch (err) {
+    console.error("Auto-load failed:", err);
+  }
+});
   setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
   logDebug('app.js initialized (storage startup temporarily disabled).');
   console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
