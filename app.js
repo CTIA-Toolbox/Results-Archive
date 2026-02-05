@@ -165,15 +165,12 @@ console.log('REACHED 3: AFTER_EGNYTE_LISTENER_SETUP');
 
 console.log('REACHED 4: BEFORE_ELS_BLOCK');
 const els = {
-  callFileInput: document.getElementById('callFileInput'),
   statusText: document.getElementById('statusText'),
   columnsPreview: document.getElementById('columnsPreview'),
   gridContainer: document.getElementById('gridContainer'),
   gridSummary: document.getElementById('gridSummary'),
   zoomSelect: document.getElementById('zoomSelect'),
   exportExcel: document.getElementById('exportExcel'),
-  lastDatasetInfo: document.getElementById('lastDatasetInfo'),
-  lastCallDatasetInfo: document.getElementById('lastCallDatasetInfo'),
   filtersDetails: document.getElementById('filtersDetails'),
   gridCard: document.getElementById('gridCard'),
   callCard: document.getElementById('callCard'),
@@ -547,15 +544,10 @@ console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
     console.log("Auto-loading default datasets...");
 
     const buildingRows = await loadDefaultBuildingResults();
-    if (buildingRows && buildingRows.length > 0) {
-      // Convert buildingRows to a Blob and File-like object for onFileSelected
-      const buildingBlob = new Blob([JSON.stringify(buildingRows)], { type: 'application/json' });
-      const buildingFile = new File([buildingBlob], 'DefaultBuildingResults.json', { type: 'application/json' });
-      if (buildingFile instanceof File) {
-        await onFileSelected(buildingFile);
+      if (buildingRows && buildingRows.length > 0) {
+        initializeDataset(buildingRows);
+        console.log("Default building dataset loaded:", buildingRows.length, "rows");
       }
-      console.log("Default building dataset loaded:", buildingRows.length, "rows");
-    }
 
     const callRows = await loadDefaultCorrelationData();
     if (callRows && callRows.length > 0) {
@@ -3135,26 +3127,5 @@ if (els.clearBuildings && els.buildingSelect) {
 
 
 
-// Call-data file input events
-if (els.callFileInput) {
-  els.callFileInput.addEventListener('click', () => {
-    els.callFileInput.value = '';
-  });
 
-  els.callFileInput.addEventListener('change', (ev) => {
-    console.log('[app] callFileInput change event fired', ev);
-    if (els.debugLog) els.debugLog.textContent += `\n[app] callFileInput change event fired`;
-    const file = els.callFileInput.files?.[0];
-    if (!file) {
-      console.log('[app] no call file selected');
-      return;
-    }
-    try {
-      onCallFileSelected(file);
-    } catch (err) {
-      console.error('[app] error in onCallFileSelected', err);
-      if (els.debugLog) els.debugLog.textContent += `\n[app] error in onCallFileSelected: ${err?.message ?? err}`;
-    }
-  });
-}
 

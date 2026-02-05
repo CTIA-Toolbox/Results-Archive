@@ -20,64 +20,12 @@
     <div class="app-title">
       <h1>Results Archive</h1>
     </div>
-  <!-- Egnyte Modal -->
-  <div id="egnyteModal" class="modal-overlay" style="display:none;">
-    <div class="modal-card">
-      <button id="egnyteModalClose" class="modal-close" title="Close">&times;</button>
-      <h2 class="modal-title">Egnyte Folder Access</h2>
-      <div id="egnyteModalContent">Loading…</div>
-    </div>
-  </div>
-
-    <div class="app-controls">
-      <label class="file">
-        <span class="label">Load Building Results.pkl</span>
-        <div class="file-row">
-          <input id="fileInput" type="file" accept=".pkl,.pickle,application/octet-stream" />
-        </div>
-        <div id="lastDatasetInfo" class="muted small"></div>
-      </label>
-
-      <label class="file">
-        <span class="label">Load Correlated Calls.pkl</span>
-        <div class="file-row">
-          <input id="callFileInput" type="file" accept=".pkl,.pickle,application/octet-stream" />
-        </div>
-        <div class="muted small">Optional: load only if you want Call Data exports (Excel/KML).</div>
-        <div id="lastCallDatasetInfo" class="muted small"></div>
-      </label>
-
-      <div class="building-picker">
-        <div class="building-picker-head">
-          <span class="label">Building(s)</span>
-          <div class="building-picker-actions">
-            <button id="selectAllBuildings" class="btn btn-small" disabled>Select all</button>
-            <button id="clearBuildings" class="btn btn-small" disabled>Clear</button>
-          </div>
-        </div>
-        <select id="buildingSelect" multiple size="4" disabled></select>
-        <div class="building-text-actions">
-          <input id="buildingText" type="text" disabled placeholder="Or type comma-separated (e.g., ATLDBC50, CHIDBC12)" />
-          <button id="applyBuildingText" class="btn btn-small" disabled>Apply</button>
-          <button id="clearBuildingText" class="btn btn-small" disabled>Clear</button>
-        </div>
-      </div>
-    </div>
+    <!-- Vertical button list container should follow here -->
   </header>
 
   <main class="app-main">
     <section class="status" aria-live="polite">
-      <div id="statusText" class="status-text">Upload a .pkl file to begin.</div>
-
-      <details id="filtersDetails" class="status-details hidden">
-        <summary>Filters</summary>
-        <div id="filtersHint" class="muted" style="margin-top: 8px;">Load a file to enable filters.</div>
-        <div id="filtersContainer" class="filters"></div>
-        <div class="filters-actions">
-          <button id="clearFilters" class="btn" disabled>Clear filters</button>
-          <button id="egnyteBtn" class="btn btn-small" type="button" style="margin-left:1em;">Go to Egnyte</button>
-        </div>
-      </details>
+      <div id="statusText" class="status-text"></div>
     </section>
 
     <section id="gridCard" class="grid-card hidden">
@@ -131,7 +79,7 @@
   </main>
 
   <footer class="app-footer muted">
-    <strong id="buildStamp">dev-206</strong>
+    <strong id="buildStamp">dev-207</strong>
   </footer>
 
 
