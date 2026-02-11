@@ -277,6 +277,10 @@ const callUi = {
   showPreview: false,
 };
 
+// Expose state objects for debugging in console
+window.state = state;
+window.callState = callState;
+
 const IDB_DB_NAME = 'resultsArchive';
 const IDB_DB_VERSION = 1;
 const IDB_STORE_FILES = 'files';
