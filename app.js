@@ -3001,7 +3001,9 @@ async function onCallFileSelected(file) {
   const records = XLSX.utils.sheet_to_json(worksheet, { defval: null });
   const columns = records.length > 0 ? Object.keys(records[0]) : [];
   callState.columns = columns;
+  callState.dimCols = guessCallDimensionColumns(columns);
   callState.records = records;
+  callState.filteredRecords = records;
   callState.lastFileInfo = {
     name: file?.name ?? '',
     size: file?.size ?? 0,
@@ -3010,7 +3012,13 @@ async function onCallFileSelected(file) {
   };
   setStatus(`Loaded call data: ${records.length.toLocaleString()} rows.`);
   logDebug(`[onCallFileSelected] XLSX loaded: ${records.length} rows, ${columns.length} columns.`);
-  // ...update UI and state as needed...
+  logDebug(`Correlation data initialization complete.`);
+  
+  // Update UI and apply filters
+  applyFilters();
+  updateCallViewToggleButton();
+  updateCallLocationSourceButton();
+  if (els.callCard) els.callCard.classList.remove('hidden');
 }
 
 
