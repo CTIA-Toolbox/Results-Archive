@@ -3234,46 +3234,71 @@ if (els.callFileInput) {
 }
 
 /**
- * AUTO-LOADER: Simulates the user selecting files on startup.
- * Adjust the filenames below to match your repository root.
+ * AUTO-LOADER: Sequential startup for PKL and XLSX assets.
  */
 (async () => {
   try {
-    console.log("Starting Sequential Auto-Load...");
+    console.log("Starting Auto-Load Sequence...");
 
-    // 1. Load Buildings FIRST
-    const buildingFilename = 'Building Results.pkl'; 
-    const resB = await fetch(`./${buildingFilename}`);
-    
+    // 1. Load Building Results (The PKL file via Pyodide)
+    const buildingPath = './Building Results.pkl';
+    const resB = await fetch(buildingPath);
     if (resB.ok) {
       const blobB = await resB.blob();
-      const fileB = new File([blobB], buildingFilename, { type: "application/octet-stream" });
+      const fileB = new File([blobB], "Building Results.pkl");
+      console.log("Loading Building Pickle...");
       
-      console.log("Processing Building Archive...");
-      await onFileSelected(fileB); // WAIT for this to finish entirely
+      // We await this to ensure Pyodide finishes before moving to Excel
+      await onFileSelected(fileB); 
       
-      // FORCE ENABLE the controls if they are still stuck
+      // Explicitly wake up the UI in case onFileSelected didn't trigger it
       if (typeof enableControls === 'function') enableControls(true);
       if (els.buildingSelect) els.buildingSelect.disabled = false;
+      console.log("Building data loaded. UI enabled.");
+    } else {
+      console.warn("Building Results.pkl not found.");
     }
 
-    // 2. Load Correlation SECOND
-    const callFilename = 'Correlation All.xlsx'; 
-    const resC = await fetch(`./${callFilename}`);
-    
+    // 2. Load Correlation (The XLSX file)
+    const correlationPath = './Correlation All.xlsx';
+    const resC = await fetch(correlationPath);
     if (resC.ok) {
-      const blobC = await resC.blob();
-      const fileC = new File([blobC], callFilename, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      console.log("Correlation file fetched. Checking XLSX library...");
       
-      console.log("Processing Call Data...");
-      if (typeof onCallFileSelected === 'function') {
-        await onCallFileSelected(fileC);
-      } else {
-        console.error("Could not find function 'onCallFileSelected'. Check the name in your backup!");
+      // Ensure the XLSX library is globally available from your CDN link
+      if (!window.XLSX) {
+        console.error("XLSX library not found. Cannot parse correlation data.");
+        return;
       }
+
+      const blobC = await resC.blob();
+      const arrayBuffer = await blobC.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      
+      // Parse the Excel file directly here to bypass the Pickle error
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      
+      console.log(`Parsed ${rows.length} correlation rows.`);
+
+      // Direct injection into your backup's data handler
+      if (typeof initializeCallDataFromRows === 'function') {
+        initializeCallDataFromRows(rows);
+      } else if (typeof onCallFileSelected === 'function') {
+        // If the above doesn't exist, try the file handler 
+        // but manually ensure it doesn't think it's a pickle
+        const fileC = new File([blobC], "Correlation All.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        await onCallFileSelected(fileC);
+      }
+      
+      console.log("Correlation data initialization complete.");
+    } else {
+      console.warn("Correlation All.xlsx not found.");
     }
 
   } catch (err) {
-    console.error("Auto-load failed:", err);
+    console.error("Auto-load encountered an error:", err);
+    if (typeof logDebug === 'function') logDebug(`Auto-load error: ${err.message}`);
   }
 })();
