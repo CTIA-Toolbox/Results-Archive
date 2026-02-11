@@ -713,8 +713,8 @@ function canExportCallsKml() {
   const c = callState.dimCols;
   const hasActualLatLon = Boolean(c.actual_lat && c.actual_lon);
   const hasActualAlt = Boolean(c.actual_geoid_alt || c.actual_hae_alt);
-  const hasLocationAlt = Boolean(c.location_geoid_alt || c.location_hae_alt);
-  return hasActualLatLon && hasActualAlt && hasLocationAlt;
+  // Location altitude is optional - will fall back to actual altitude if missing
+  return hasActualLatLon && hasActualAlt;
 }
 
 function updateCallViewToggleButton() {
@@ -1262,9 +1262,14 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
 
     const locGeoid = c.location_geoid_alt ? parseNumber(r?.[c.location_geoid_alt]) : null;
     const locHae = c.location_hae_alt ? parseNumber(r?.[c.location_hae_alt]) : null;
-    const locAlt = locGeoid !== null
+    let locAlt = locGeoid !== null
       ? locGeoid
       : (locHae !== null && geoidSep !== null ? (locHae - geoidSep) : locHae);
+    
+    // Fallback: if no location altitude columns exist, use actual altitude
+    if (locAlt === null) {
+      locAlt = actualAlt;
+    }
 
     if (actualAlt === null || locAlt === null) continue;
 
