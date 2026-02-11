@@ -2752,25 +2752,46 @@ async function onFileSelected(file) {
   logDebug(`[onFileSelected] File selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes, type=${file?.type ?? 'unknown'})`);
 
   try {
-    logDebug('[onFileSelected] Reading file as ArrayBuffer…');
-    const buf = await file.arrayBuffer();
-    logDebug(`[onFileSelected] ArrayBuffer read: ${buf.byteLength} bytes`);
-    const bytes = new Uint8Array(buf);
+    // Detect file type by extension
+    const fileName = file?.name?.toLowerCase() || '';
+    if (fileName.endsWith('.pkl') || file.type === 'application/octet-stream') {
+      logDebug('[onFileSelected] Reading file as ArrayBuffer…');
+      const buf = await file.arrayBuffer();
+      logDebug(`[onFileSelected] ArrayBuffer read: ${buf.byteLength} bytes`);
+      const bytes = new Uint8Array(buf);
 
-    setStatus('Loading Pyodide + pandas (first load can take a bit)…');
-    logDebug('[onFileSelected] Ensuring Pyodide is available…');
-    console.log('REACHED 9: BEFORE_ensurePyodideAvailable_call (block ~2500)');
-    console.log('REACHED 10: BEFORE_ensurePyodideAvailable_call (block ~2650)');
-    await ensurePyodideAvailable();
-    logDebug('[onFileSelected] Starting Pyodide unpickle…');
+      setStatus('Loading Pyodide + pandas (first load can take a bit)…');
+      logDebug('[onFileSelected] Ensuring Pyodide is available…');
+      console.log('REACHED 9: BEFORE_ensurePyodideAvailable_call (block ~2500)');
+      console.log('REACHED 10: BEFORE_ensurePyodideAvailable_call (block ~2650)');
+      await ensurePyodideAvailable();
+      logDebug('[onFileSelected] Starting Pyodide unpickle…');
 
-    const { columns, records } = await unpickleDataFrameToRecords(bytes);
-    logDebug(`[onFileSelected] Unpickle succeeded. ${records.length} records, ${columns.length} columns.`);
+      const { columns, records } = await unpickleDataFrameToRecords(bytes);
+      logDebug(`[onFileSelected] Unpickle succeeded. ${records.length} records, ${columns.length} columns.`);
 
-    state.columns = columns;
-    state.dimCols = guessDimensionColumns(columns);
-    state.metricCols = guessMetricColumns(columns);
-    state.records = records;
+      state.columns = columns;
+      state.dimCols = guessDimensionColumns(columns);
+      state.metricCols = guessMetricColumns(columns);
+      state.records = records;
+    } else if (fileName.endsWith('.xlsx')) {
+      logDebug('[onFileSelected] Reading XLSX file…');
+      const buf = await file.arrayBuffer();
+      const XLSX = window.XLSX;
+      if (!XLSX) throw new Error('XLSX library not loaded.');
+      const workbook = XLSX.read(buf, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const records = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+      const columns = records.length > 0 ? Object.keys(records[0]) : [];
+      state.columns = columns;
+      state.dimCols = guessDimensionColumns(columns);
+      state.metricCols = guessMetricColumns(columns);
+      state.records = records;
+      logDebug(`[onFileSelected] XLSX loaded: ${records.length} records, ${columns.length} columns.`);
+    } else {
+      throw new Error('Unsupported file type');
+    }
 
     state.lastFileInfo = {
       name: file?.name ?? '',
@@ -2811,8 +2832,8 @@ async function onFileSelected(file) {
     enableControls(true);
     if (els.zoomSelect) els.zoomSelect.disabled = false;
     setExportEnabled(false);
-    setStatus(`Loaded ${records.length.toLocaleString()} rows. Select building(s) above to begin.`);
-    logDebug(`[onFileSelected] Loaded ${records.length} rows, ${columns.length} columns.`);
+    setStatus(`Loaded ${state.records.length.toLocaleString()} rows. Select building(s) above to begin.`);
+    logDebug(`[onFileSelected] Loaded ${state.records.length} rows, ${state.columns.length} columns.`);
 
     render();
 
