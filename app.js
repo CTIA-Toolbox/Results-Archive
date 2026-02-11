@@ -1,91 +1,3 @@
-// Enable/disable Export KML button for buildings
-function setExportKmlEnabled(enabled) {
-  const btn = document.getElementById('exportKml');
-  if (btn) btn.disabled = !enabled;
-}
-// --- Export Building Data to KML ---
-function exportBuildingDataToKml() {
-  if (!state.filteredRecords.length) {
-    setStatus('No building data loaded or filtered.', { error: true });
-    return;
-  }
-  // Basic KML structure for building footprints
-  const rows = state.filteredRecords;
-  const buildingCol = state.dimCols.building;
-  if (!buildingCol) {
-    setStatus('No Building column detected.', { error: true });
-    return;
-  }
-  const pieces = [];
-  pieces.push('<?xml version="1.0" encoding="UTF-8"?>');
-  pieces.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
-  pieces.push('<Document>');
-  pieces.push('<name>Building Footprints</name>');
-  for (const r of rows) {
-    const b = r[buildingCol];
-    const name = b ? String(b) : 'Building';
-    pieces.push('<Placemark>');
-    pieces.push(`<name>${name}</name>`);
-    // Add more building details here if needed
-    pieces.push('</Placemark>');
-  }
-  pieces.push('</Document>');
-  pieces.push('</kml>');
-  const kml = pieces.join('\n');
-  const dt = new Date();
-  const filename = `Building_Footprints_${dt.getFullYear()}-${dt.getMonth()+1}-${dt.getDate()}_${dt.getHours()}${dt.getMinutes()}.kml`;
-  downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
-  setStatus(`Exported KML: ${filename}`);
-}
-
-// Attach Export KML button event listener
-document.addEventListener('DOMContentLoaded', () => {
-  const exportKmlBtn = document.getElementById('exportKml');
-  if (exportKmlBtn) {
-    exportKmlBtn.onclick = exportBuildingDataToKml;
-  }
-  const clearFiltersBtn = document.getElementById('clearFilters');
-  if (clearFiltersBtn) {
-    clearFiltersBtn.onclick = clearAllFilters;
-  }
-});
-// Initialize building dataset from an array of JS objects
-function initializeDataset(rows) {
-  try {
-    if (!Array.isArray(rows) || rows.length === 0) {
-      setStatus('No building data rows provided.');
-      state.columns = [];
-      state.dimCols = {};
-      state.metricCols = {};
-      state.records = [];
-      state.filteredRecords = [];
-      setExportEnabled(false);
-      return;
-    }
-
-    // Infer columns from keys of first row
-    const columns = Object.keys(rows[0]);
-    state.columns = columns;
-    state.dimCols = guessDimensionColumns(columns);
-    state.metricCols = guessMetricColumns(columns);
-    state.records = rows;
-    state.filteredRecords = rows;
-
-    recomputeKnownBuildings && recomputeKnownBuildings();
-    populateBuildingSelectOptions && populateBuildingSelectOptions();
-    syncBuildingSelectFromState && syncBuildingSelectFromState();
-    applyFilters && applyFilters();
-    buildFiltersUI && buildFiltersUI();
-    updateSectionsVisibility && updateSectionsVisibility();
-    render && render();
-
-    setStatus(`Loaded building data: ${rows.length.toLocaleString()} rows.`);
-    setExportEnabled(true);
-    setExportKmlEnabled(state.filteredRecords && state.filteredRecords.length > 0);
-  } catch (err) {
-    console.error('Failed to load building dataset', err);
-  }
-}
 // --- Color Palette ---
 const GRAY = 'FFD9D9D9';
 const GREEN = 'FF1CA45C';
@@ -100,30 +12,6 @@ const STYLE_80PCT_RED = {
 };
     // --- Style application helper (must be defined before use) ---
     // ...existing code...
-  // --- Load Default Correlation Data (Excel) ---
-  async function loadDefaultCorrelationData() {
-    // Path to the default Correlation file (relative to index.html)
-    const DEFAULT_CORRELATION_XLSX = 'Correlation All.xlsx';
-    try {
-      const response = await fetch(DEFAULT_CORRELATION_XLSX);
-      if (!response.ok) {
-        throw new Error('Could not fetch default Correlation All.xlsx file.');
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      const data = new Uint8Array(arrayBuffer);
-      const XLSX = window.XLSX;
-      if (!XLSX) throw new Error('XLSX library not loaded.');
-      const workbook = XLSX.read(data, { type: 'array' });
-      // Use the first sheet
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-      return rows;
-    } catch (err) {
-      console.error('Failed to load Correlation All.xlsx', err);
-      return [];
-    }
-  }
   // --- Style application helper (must be defined before use) ---
   const applyStyle = (r, c, style) => {
     const addr = XLSX.utils.encode_cell({ r, c });
@@ -131,40 +19,6 @@ const STYLE_80PCT_RED = {
     if (!cell) return;
     cell.s = { ...(cell.s || {}), ...(style || {}) };
   };
-
-// --- Load Default Building Results (Excel) ---
-async function loadDefaultBuildingResults() {
-  // Path to the default Building Results Excel file (relative to index.html)
-  const DEFAULT_BUILDING_RESULTS_FILE = 'BuildingFootprints.kml'; // Update to the correct Excel file if needed
-  const DEFAULT_BUILDING_RESULTS_XLSX = 'Building Results.xlsx'; // If the Excel file is named differently, update here
-  // Try .xlsx first, fallback to .xls if needed
-  const candidates = [DEFAULT_BUILDING_RESULTS_XLSX, 'Building Results.xls'];
-  let response, fileUrl;
-  for (const candidate of candidates) {
-    try {
-      response = await fetch(candidate);
-      if (response.ok) {
-        fileUrl = candidate;
-        break;
-      }
-    } catch (e) {
-      // Try next
-    }
-  }
-  if (!response || !response.ok) {
-    throw new Error('Could not fetch default Building Results Excel file.');
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  const data = new Uint8Array(arrayBuffer);
-  const XLSX = window.XLSX;
-  if (!XLSX) throw new Error('XLSX library not loaded.');
-  const workbook = XLSX.read(data, { type: 'array' });
-  // Use the first sheet
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-  return rows;
-}
 // ...existing code...
 // --- Style Definitions (global) ---
 const BORDER_THIN = {
@@ -202,6 +56,7 @@ window.addEventListener('unhandledrejection', function(event) {
   console.error('[GLOBAL PROMISE REJECTION]', event.reason);
 });
 console.log('REACHED 1: TOP OF FILE');
+import { unpickleDataFrameToRecords } from './pyodide-loader.js';
 import { buildPivot, renderPivotGrid } from './pivot.js';
 console.log('REACHED 2: AFTER IMPORTS');
 // --- Egnyte Modal Integration ---
@@ -311,12 +166,16 @@ console.log('REACHED 3: AFTER_EGNYTE_LISTENER_SETUP');
 
 console.log('REACHED 4: BEFORE_ELS_BLOCK');
 const els = {
+  fileInput: document.getElementById('fileInput'),
+  callFileInput: document.getElementById('callFileInput'),
   statusText: document.getElementById('statusText'),
   columnsPreview: document.getElementById('columnsPreview'),
   gridContainer: document.getElementById('gridContainer'),
   gridSummary: document.getElementById('gridSummary'),
   zoomSelect: document.getElementById('zoomSelect'),
   exportExcel: document.getElementById('exportExcel'),
+  lastDatasetInfo: document.getElementById('lastDatasetInfo'),
+  lastCallDatasetInfo: document.getElementById('lastCallDatasetInfo'),
   filtersDetails: document.getElementById('filtersDetails'),
   gridCard: document.getElementById('gridCard'),
   callCard: document.getElementById('callCard'),
@@ -421,9 +280,58 @@ const callUi = {
 const IDB_DB_NAME = 'resultsArchive';
 const IDB_DB_VERSION = 1;
 const IDB_STORE_FILES = 'files';
+const IDB_KEY_ARCHIVE_PKL = 'archivePkl';
+const IDB_KEY_CALL_PKL = 'callPkl';
 
+const PYODIDE_CDN_URL = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
 
+function ensureExternalScript({ url, globalName, timeoutMs = 30000 }) {
+  // If already present, no-op.
+  if (globalName && globalName in window) return Promise.resolve();
 
+  // If a script with this URL already exists, wait for it.
+  const existing = Array.from(document.scripts).find((s) => s.src === url);
+  if (existing) {
+    if (globalName && globalName in window) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`Timed out loading ${url}`)), timeoutMs);
+      existing.addEventListener('load', () => {
+        clearTimeout(t);
+        resolve();
+      });
+      existing.addEventListener('error', () => {
+        clearTimeout(t);
+        reject(new Error(`Failed to load ${url}`));
+      });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    const t = setTimeout(() => {
+      script.remove();
+      reject(new Error(`Timed out loading ${url}`));
+    }, timeoutMs);
+    script.onload = () => {
+      clearTimeout(t);
+      resolve();
+    };
+    script.onerror = () => {
+      clearTimeout(t);
+      reject(new Error(`Failed to load ${url}`));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function ensurePyodideAvailable() {
+  // loadPyodide is provided by pyodide.js
+  if ('loadPyodide' in window) return;
+  logDebug('Pyodide global not found; injecting pyodide.js…');
+  await ensureExternalScript({ url: PYODIDE_CDN_URL, globalName: 'loadPyodide', timeoutMs: 60000 });
+}
 
 function formatBytes(n) {
   const num = Number(n);
@@ -686,68 +594,46 @@ console.log('REACHED 7: BEFORE_CLEAR_PKLS_IIFE');
 
 (async () => {
   try {
-    console.log("AUTOLOAD IIFE EXECUTED");
-    console.log("Auto-loading default datasets...");
-
-    const buildingRows = await loadDefaultBuildingResults();
-      if (buildingRows && buildingRows.length > 0) {
-        initializeDataset(buildingRows);
-        console.log("Default building dataset loaded:", buildingRows.length, "rows");
-      }
-
-    const callRows = await loadDefaultCorrelationData();
-    if (callRows && callRows.length > 0) {
-      initializeCallDataFromRows(callRows);
-      console.log("Default call dataset loaded:", callRows.length, "rows");
-    }
-// Initialize call data directly from an array of JS objects (bypassing pickle/pyodide)
-function initializeCallDataFromRows(rows) {
-  // rows is already an array of JS objects
-  // Reuse the same logic that runs after the pickle is converted to JSON
-  // This should match the post-processing in loadCallDatasetFromBytes
-  try {
-    if (!Array.isArray(rows) || rows.length === 0) {
-      setStatus('No call data rows provided.');
-      callState.columns = [];
-      callState.dimCols = {};
-      callState.records = [];
-      callState.filteredRecords = [];
-      callState.lastFileInfo = null;
-      setCallsExportEnabled(false);
-      return;
-    }
-
-    // Infer columns from keys of first row
-    const columns = Object.keys(rows[0]);
-    callState.columns = columns;
-    callState.dimCols = guessCallDimensionColumns(columns);
-    callState.records = rows;
-    callState.filteredRecords = rows;
-    callState.lastFileInfo = { name: 'DefaultCorrelationData', size: rows.length, lastModified: Date.now(), type: 'application/json' };
-
-    recomputeKnownBuildings && recomputeKnownBuildings();
-    populateBuildingSelectOptions && populateBuildingSelectOptions();
-    syncBuildingSelectFromState && syncBuildingSelectFromState();
-    applyFilters && applyFilters();
-    buildFiltersUI && buildFiltersUI();
-    updateSectionsVisibility && updateSectionsVisibility();
-
-    setStatus(`Loaded call data: ${rows.length.toLocaleString()} rows.`);
-    setCallsExportEnabled(true);
-    setCallsKmlExportEnabled(canExportCallsKml && canExportCallsKml());
-    updateCallLocationSourceButton && updateCallLocationSourceButton();
-    updateCallViewToggleButton && updateCallViewToggleButton();
-    updateSectionsVisibility && updateSectionsVisibility();
-  } catch (err) {
-    console.error("Failed to load Correlation All.xlsx", err);
-  }
-}
-
-  } catch (err) {
-    console.error("Auto-load failed:", err);
+    if (els.lastDatasetInfo) els.lastDatasetInfo.textContent = '';
+    if (els.lastCallDatasetInfo) els.lastCallDatasetInfo.textContent = '';
+    await idbDeletePkl(IDB_KEY_ARCHIVE_PKL);
+    await idbDeletePkl(IDB_KEY_CALL_PKL);
+    logDebug('Cleared any previously saved PKLs (previous-session restore disabled).');
+  } catch {
+    // ignore
   }
 })();
 
+
+
+function setGridZoom(value) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return;
+  const clamped = Math.max(0.5, Math.min(1, v));
+  document.documentElement.style.setProperty('--grid-zoom', String(clamped));
+}
+
+// Restore grid zoom preference early.
+/*
+try {
+  const saved = localStorage.getItem('resultsArchive.gridZoom');
+  if (saved) setGridZoom(saved);
+} catch {
+  // ignore
+}
+*/
+
+console.log('REACHED 8: AFTER_STORAGE_STARTUP');
+
+// ...existing code...
+
+try {
+  setStatus('Ready. Load a Dataset (.pkl) to begin. Call data is optional.');
+  logDebug('app.js initialized (storage startup temporarily disabled).');
+  console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+} catch (err) {
+  console.error('[DIAG] Error after REACHED 8:', err);
+}
 
 // ...existing code...
 
@@ -1578,43 +1464,13 @@ function exportCurrentPivotToExcel() {
   for (const rowId of exportRowIds) {
     const meta = pivot.rowMeta?.get(rowId) ?? {};
     const row = [];
-    // Determine indices for group keys
-    const buildingIndex = leftCols.findIndex(c => c.key === state.dimCols.building);
-    const sectionIndex  = leftCols.findIndex(c => c.key === state.dimCols.row_type);
-
-    // Detect group boundaries
-    const buildingChanged = buildingIndex >= 0 && meta[state.dimCols.building] !== prevVals[buildingIndex];
-    const sectionChanged  = sectionIndex  >= 0 && meta[state.dimCols.row_type]  !== prevVals[sectionIndex];
-
-    // Reset duplicate suppression when groups change
-    if (buildingChanged) {
-      // New building → reset everything
-      prevVals.fill(undefined);
-    } else if (sectionChanged) {
-      // New section → reset section only
-      prevVals[sectionIndex] = undefined;
-    }
-
-    // Fill left columns with selective duplicate suppression
+    // Fill left columns, blanking repeats
     for (let i = 0; i < leftCols.length; i++) {
       const key = leftCols[i].key;
       const val = meta[key];
-
-      // Only suppress duplicates for Building, Participant, Section
-      const suppress =
-        key === state.dimCols.building ||
-        key === state.dimCols.participant ||
-        key === state.dimCols.row_type;
-
-      if (suppress) {
-        if (prevVals[i] === val) {
-          row.push('');
-        } else {
-          row.push(val);
-          prevVals[i] = val;
-        }
+      if (prevVals[i] === val) {
+        row.push('');
       } else {
-        // Always show OS and Identifier
         row.push(val);
         prevVals[i] = val;
       }
@@ -2344,7 +2200,6 @@ function applyFilters() {
   updateCallLocationSourceButton();
   setCallsKmlExportEnabled(canExportCallsKml());
   updateCallViewToggleButton();
-  setExportKmlEnabled(state.filteredRecords && state.filteredRecords.length > 0);
 }
 
 function resetAfterBuildingClear() {
@@ -2892,13 +2747,6 @@ function render() {
 }
 
 async function onFileSelected(file) {
-
-  // Prevent accidental startup triggers or empty events
-  if (!(file instanceof File)) {
-    console.log("[DIAG] onFileSelected ignored — no real file provided");
-    return;
-  }
-
   enableControls(false);
   setStatus('Reading file…');
   logDebug(`[onFileSelected] File selected: ${file?.name ?? '(unknown)'} (${file?.size ?? 0} bytes, type=${file?.type ?? 'unknown'})`);
@@ -3271,8 +3119,129 @@ if (els.clearBuildings && els.buildingSelect) {
 
 
 
+// File input events — attach in a function and call on DOMContentLoaded as well
+// ...existing code...
+function attachFileInputListeners() {
+  console.log('[DIAG] attachFileInputListeners called');
+  if (!els.fileInput) {
+    console.log('[DIAG] attachFileInputListeners: els.fileInput is missing, returning early');
+    setStatus('App initialization: file input not found in DOM yet. Will retry on DOMContentLoaded.');
+    logDebug('Notice: #fileInput not found yet; delaying listener attachment.');
+    return;
+  }
 
+  console.log('[app] attaching fileInput listeners, element=', els.fileInput);
+  console.log('REACHED FILE INPUT HANDLER SETUP');
+  if (els.fileInput.__listenersAttached) {
+    console.log('[DIAG] attachFileInputListeners: listeners already attached, returning early');
+    return;
+  }
 
+  els.fileInput.addEventListener('click', () => {
+    console.log('[app] fileInput clicked');
+    if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput clicked`;
+    try { els.fileInput.value = ''; } catch (e) { console.warn(e); }
+  });
 
+  const fileChangeHandler = (ev) => {
+    try {
+      console.log('[app] fileInput change/input event fired', ev);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] fileInput change/input event fired`;
+      const file = els.fileInput.files?.[0];
+      if (!file) {
+        console.log('[app] No file selected in fileInput change event.');
+        if (els.debugLog) els.debugLog.textContent += `\n[app] No file selected in fileInput change event.`;
+        return;
+      }
+      console.log('[app] file selected:', file.name, file.size, file.type);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] file selected: ${file.name} (${file.size} bytes)`;
+      onFileSelected(file);
+    } catch (err) {
+      console.error('[app] error in fileChangeHandler', err);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] error in fileChangeHandler: ${err?.message ?? err}`;
+    }
+  };
 
+  console.log('REACHED FILE INPUT HANDLER SETUP');
+  els.fileInput.addEventListener('change', function(event) {
+    console.log('FILE INPUT CHANGED', event.target.files);
+    return fileChangeHandler(event);
+  });
+  els.fileInput.addEventListener('input', function(event) {
+    console.log('FILE INPUT CHANGED', event.target.files);
+    return fileChangeHandler(event);
+  });
+  els.fileInput.__listenersAttached = true;
+}
 
+// Try to attach immediately, and also on DOMContentLoaded in case elements were not ready
+console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+attachFileInputListeners();
+window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
+
+// Call-data file input events
+if (els.callFileInput) {
+  els.callFileInput.addEventListener('click', () => {
+    els.callFileInput.value = '';
+  });
+
+  els.callFileInput.addEventListener('change', (ev) => {
+    console.log('[app] callFileInput change event fired', ev);
+    if (els.debugLog) els.debugLog.textContent += `\n[app] callFileInput change event fired`;
+    const file = els.callFileInput.files?.[0];
+    if (!file) {
+      console.log('[app] no call file selected');
+      return;
+    }
+    try {
+      onCallFileSelected(file);
+    } catch (err) {
+      console.error('[app] error in onCallFileSelected', err);
+      if (els.debugLog) els.debugLog.textContent += `\n[app] error in onCallFileSelected: ${err?.message ?? err}`;
+    }
+  });
+}
+
+/**
+ * AUTO-LOADER: Simulates the user selecting files on startup.
+ * Adjust the filenames below to match your repository root.
+ */
+(async () => {
+  try {
+    console.log("Starting Auto-Load Sequence...");
+
+    // 1. Load the Building Results (Archive)
+    const buildingFilename = 'Building Results.pkl'; // Ensure this matches your actual file
+    const resB = await fetch(`./${buildingFilename}`);
+    
+    if (resB.ok) {
+      const blobB = await resB.blob();
+      const fileB = new File([blobB], buildingFilename, { type: "application/octet-stream" });
+      
+      console.log("Auto-loading Building Archive...");
+      await onFileSelected(fileB); 
+    } else {
+      console.warn(`${buildingFilename} not found in root.`);
+    }
+
+    // 2. Load the Correlation Data (Optional Call Data)
+    // If your backup has a similar function for calls, e.g., onCallFileSelected(file)
+    const callFilename = 'Correlation All.xlsx'; 
+    const resC = await fetch(`./${callFilename}`);
+    
+    if (resC.ok) {
+      const blobC = await resC.blob();
+      const fileC = new File([blobC], callFilename, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      
+      console.log("Auto-loading Call Data...");
+      // Replace with your backup's actual call-loading function name:
+      if (typeof onCallFileSelected === 'function') {
+        await onCallFileSelected(fileC);
+      }
+    }
+
+  } catch (err) {
+    console.error("Auto-load failed during startup:", err);
+    logDebug(`Auto-load failed: ${err.message}`);
+  }
+})();
