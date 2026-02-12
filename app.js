@@ -2468,8 +2468,13 @@ function buildFiltersUI() {
     const callCol = callState.dimCols?.[logicalKey];
     if (!archiveCol && !callCol) return false;
 
-    const archiveValues = archiveCol ? uniqSortedValues(buildingScopedArchive, archiveCol) : [];
-    const callValues = callCol ? uniqSortedValues(buildingScopedCalls, callCol) : [];
+    // For 'stage', use filtered records so the filter matches what's in the viewer.
+    // For other filters, use building-scoped records to show all available options.
+    const archiveSource = (logicalKey === 'stage') ? state.filteredRecords : buildingScopedArchive;
+    const callSource = (logicalKey === 'stage') ? callState.filteredRecords : buildingScopedCalls;
+
+    const archiveValues = archiveCol ? uniqSortedValues(archiveSource, archiveCol) : [];
+    const callValues = callCol ? uniqSortedValues(callSource, callCol) : [];
     let values = unionValues(archiveValues, callValues);
     if (!values.length) return false;
 
