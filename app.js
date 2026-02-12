@@ -2720,18 +2720,19 @@ function render() {
     return;
   }
 
-  // Filter pivot columns by selected stages (if any).
-  const selectedStages = state.filters.stage;
-  const recordsForPivot = (selectedStages && selectedStages.size > 0)
-    ? state.filteredRecords.filter((r) => selectedStages.has(toKey(r?.[colKey])))
-    : state.filteredRecords;
-
+  // Build pivot from all filtered records (Stage selections don't filter records)
   const pivot = buildPivot({
-    records: recordsForPivot,
+    records: state.filteredRecords,
     rowKey: rowKeys,
     colKey,
     valueKey: metricKeys,
   });
+
+  // Filter pivot columns by selected stages (if any).
+  const selectedStages = state.filters.stage;
+  if (selectedStages && selectedStages.size > 0) {
+    pivot.cols = pivot.cols.filter((col) => selectedStages.has(col));
+  }
 
   // Ensure results rows follow the same preferred Section ordering used in the filters UI.
   // (Within each other left-column grouping, e.g., Building/Participant/OS.)
