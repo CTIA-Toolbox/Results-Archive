@@ -1916,7 +1916,14 @@ function buildingScopedRecords(records) {
   const selectedBuildings = state.filters.building;
   if (!selectedBuildings || selectedBuildings.size === 0) return records;
 
-  return records.filter((r) => selectedBuildings.has(toKey(r?.[buildingCol])));
+  const selectedNorm = new Set(
+    Array.from(selectedBuildings, (v) => toKey(v).toLowerCase())
+  );
+
+  return records.filter((r) => {
+    const val = toKey(r?.[buildingCol]).toLowerCase();
+    return selectedNorm.has(val);
+  });
 }
 
 function buildingScopedRecordsByDim(records, dimCols) {
@@ -1926,7 +1933,14 @@ function buildingScopedRecordsByDim(records, dimCols) {
   const selectedBuildings = state.filters.building;
   if (!selectedBuildings || selectedBuildings.size === 0) return records;
 
-  return records.filter((r) => selectedBuildings.has(toKey(r?.[buildingCol])));
+  const selectedNorm = new Set(
+    Array.from(selectedBuildings, (v) => toKey(v).toLowerCase())
+  );
+
+  return records.filter((r) => {
+    const val = toKey(r?.[buildingCol]).toLowerCase();
+    return selectedNorm.has(val);
+  });
 }
 
 function measureTextPx(text, font) {
