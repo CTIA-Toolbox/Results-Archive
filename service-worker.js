@@ -5,7 +5,7 @@
 // - This caches only local assets. Pyodide is loaded from a CDN and is not cached here.
 // - Extend later: add a user prompt, versioning strategy, and optional CDN caching.
 
-const CACHE_NAME = 'pkl-pivot-pwa-v65';
+const CACHE_NAME = 'pkl-pivot-pwa-v68';
 
 const APP_SHELL = [
   './',
@@ -55,6 +55,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
+
+  // Always fetch data files fresh (avoid stale XLSX in cache).
+  if (url.origin === self.location.origin && url.pathname.toLowerCase().endsWith('.xlsx')) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
 
   // Only handle same-origin requests for the app shell.
   if (url.origin !== self.location.origin) return;
