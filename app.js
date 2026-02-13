@@ -645,12 +645,20 @@ function detectColumn(columns, candidates) {
   const lower = columns.map((c) => String(c).toLowerCase());
   for (const cand of candidates) {
     const idx = lower.indexOf(cand.toLowerCase());
-    if (idx >= 0) return columns[idx];
+    if (idx >= 0) {
+      // Uncomment to debug:
+      // console.log(`[detectColumn] Matched candidate "${cand}" to column "${columns[idx]}"`);
+      return columns[idx];
+    }
   }
   // Fallback: contains-match
   for (const cand of candidates) {
     const idx = lower.findIndex((c) => c.includes(cand.toLowerCase()));
-    if (idx >= 0) return columns[idx];
+    if (idx >= 0) {
+      // Uncomment to debug:
+      // console.log(`[detectColumn] Contains-matched candidate "${cand}" to column "${columns[idx]}"`);
+      return columns[idx];
+    }
   }
   return null;
 }
@@ -3036,6 +3044,8 @@ async function onCallFileSelected(file) {
   };
   setStatus(`Loaded call data: ${records.length.toLocaleString()} rows.`);
   logDebug(`[onCallFileSelected] XLSX loaded: ${records.length} rows, ${columns.length} columns.`);
+  logDebug(`[onCallFileSelected] Raw columns: ${columns.join(', ')}`);
+  logDebug(`[onCallFileSelected] Detected dimCols: ${JSON.stringify(callState.dimCols)}`);
   logDebug(`Correlation data initialization complete.`);
   
   // Update UI and apply filters

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <h1>Debug Test for Correlation Data</h1>
+    <div id="output"></div>
+    <script>
+        async function testLoad() {
+            const output = document.getElementById('output');
+            
+            // Test 1: Try to fetch the file
+            try {
+                const res = await fetch('./Correlation All.xlsx');
+                output.innerHTML += `<p>Fetch status: ${res.status} (${res.statusText})</p>`;
+                
+                if (res.ok) {
+                    const blob = await res.blob();
+                    output.innerHTML += `<p>File size: ${blob.size} bytes</p>`;
+                    
+                    // Test 2: Parse with XLSX
+                    const buf = await blob.arrayBuffer();
+                    const workbook = XLSX.read(buf, { type: 'array' });
+                    output.innerHTML += `<p>Sheets: ${workbook.SheetNames.join(', ')}</p>`;
+                    
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+                    output.innerHTML += `<p>Total rows: ${rows.length}</p>`;
+                    
+                    // Test 3: Check Verizon data
+                    const verizonRows = rows.filter(r => r.Participant === 'Verizon');
+                    output.innerHTML += `<p>Verizon rows: ${verizonRows.length}</p>`;
+                    
+                    if (verizonRows.length > 0) {
+                        output.innerHTML += `<p>First Verizon row: ${JSON.stringify(verizonRows[0])}</p>`;
+                        const uniqueStages = [...new Set(verizonRows.map(r => r.Stage))];
+                        output.innerHTML += `<p>Verizon stages: ${uniqueStages.join(', ')}</p>`;
+                    }
+                }
+            } catch (err) {
+                output.innerHTML += `<p style="color:red">Error: ${err.message}</p>`;
+            }
+        }
+        
+        testLoad();
+    </script>
+</body>
+</html>
