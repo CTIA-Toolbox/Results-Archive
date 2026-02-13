@@ -1182,10 +1182,9 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
   pieces.push('<Style id="lineOk"><LineStyle><color>ff00ff00</color><width>2</width></LineStyle></Style>');
   pieces.push('<Style id="lineBad"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>');
 
-  const buildingCol = c.building;
   const participantCol = c.participant;
   const stageCol = c.stage;
-  const pointCol = c.point_id;
+  const locationSourceCol = c.location_source;
 
   const makeNode = () => ({ count: 0, items: [], children: new Map() });
   const root = makeNode();
@@ -1200,12 +1199,11 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     root.count++;
 
     // Preferred hierarchy for Google Earth toggles:
-    // Building -> Participant -> Stage -> Point
+    // Stage -> Participant -> Location Technology (Location Source)
     const levels = [];
-    if (buildingCol) levels.push(toKey(r?.[buildingCol]) || '(blank)');
-    if (participantCol) levels.push(toKey(r?.[participantCol]) || '(blank)');
     if (stageCol) levels.push(toKey(r?.[stageCol]) || '(blank)');
-    if (pointCol) levels.push(toKey(r?.[pointCol]) || '(blank)');
+    if (participantCol) levels.push(toKey(r?.[participantCol]) || '(blank)');
+    if (locationSourceCol) levels.push(toKey(r?.[locationSourceCol]) || '(blank)');
 
     if (!levels.length) {
       root.items.push(placemarkXml);
@@ -1345,9 +1343,8 @@ async function exportCallsToKml() {
 
   const rows = callState.filteredRecords;
   const participantCol = callState.dimCols.participant;
-  const buildingCol = callState.dimCols.building;
   const stageCol = callState.dimCols.stage;
-  const pointCol = callState.dimCols.point_id;
+  const locationSourceCol = callState.dimCols.location_source;
 
   const buildingLabel = (() => {
     const selected = state.filters.building;
@@ -1359,11 +1356,11 @@ async function exportCallsToKml() {
   })();
 
   // Export a single combined KML. If grouping columns exist, emit nested folders.
-  const grouped = Boolean(buildingCol || participantCol || stageCol || pointCol);
+  const grouped = Boolean(participantCol || stageCol || locationSourceCol);
   const kml = buildCallKmlFromRows({
     rows,
     docName: grouped
-      ? `Call Vectors (by Building/Participant/Stage/Point) — ${buildingLabel} (${rows.length.toLocaleString()})`
+      ? `Call Vectors (by Stage/Participant/Location Technology) — ${buildingLabel} (${rows.length.toLocaleString()})`
       : `Call Vectors — ${buildingLabel} (${rows.length.toLocaleString()})`,
     groupByParticipant: grouped,
   });
