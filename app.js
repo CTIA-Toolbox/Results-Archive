@@ -1184,7 +1184,8 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
 
   const buildingCol = c.building;
   const participantCol = c.participant;
-  const locationSourceCol = c.location_source;
+  const stageCol = c.stage;
+  const pointCol = c.point_id;
 
   const makeNode = () => ({ count: 0, items: [], children: new Map() });
   const root = makeNode();
@@ -1198,54 +1199,26 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
   const addPlacemark = (r, placemarkXml) => {
     root.count++;
 
-    // Grouping strategy:
-    // - Default: by Building (previous behavior)
-    // - If groupByParticipant:
-    //     Participant -> Location Source (if available) -> Building (if available)
-    //     Otherwise Participant -> Building (if available)
-    if (groupByParticipant && participantCol) {
-      const p = toKey(r?.[participantCol]) || '(blank)';
-      const pNode = getOrCreateChild(root, p);
-      pNode.count++;
+    // Preferred hierarchy for Google Earth toggles:
+    // Building -> Participant -> Stage -> Point
+    const levels = [];
+    if (buildingCol) levels.push(toKey(r?.[buildingCol]) || '(blank)');
+    if (participantCol) levels.push(toKey(r?.[participantCol]) || '(blank)');
+    if (stageCol) levels.push(toKey(r?.[stageCol]) || '(blank)');
+    if (pointCol) levels.push(toKey(r?.[pointCol]) || '(blank)');
 
-      if (locationSourceCol) {
-        const ls = toKey(r?.[locationSourceCol]) || '(blank)';
-        const lsNode = getOrCreateChild(pNode, ls);
-        lsNode.count++;
-
-        if (buildingCol) {
-          const b = toKey(r?.[buildingCol]) || '(blank)';
-          const bNode = getOrCreateChild(lsNode, b);
-          bNode.count++;
-          bNode.items.push(placemarkXml);
-          return;
-        }
-
-        lsNode.items.push(placemarkXml);
-        return;
-      }
-
-      if (buildingCol) {
-        const b = toKey(r?.[buildingCol]) || '(blank)';
-        const bNode = getOrCreateChild(pNode, b);
-        bNode.count++;
-        bNode.items.push(placemarkXml);
-        return;
-      }
-
-      pNode.items.push(placemarkXml);
+    if (!levels.length) {
+      root.items.push(placemarkXml);
       return;
     }
 
-    if (buildingCol) {
-      const b = toKey(r?.[buildingCol]) || '(blank)';
-      const bNode = getOrCreateChild(root, b);
-      bNode.count++;
-      bNode.items.push(placemarkXml);
-      return;
+    let node = root;
+    for (const name of levels) {
+      node = getOrCreateChild(node, name);
+      node.count++;
     }
 
-    root.items.push(placemarkXml);
+    node.items.push(placemarkXml);
   };
 
   for (const r of rows) {
@@ -1372,6 +1345,9 @@ async function exportCallsToKml() {
 
   const rows = callState.filteredRecords;
   const participantCol = callState.dimCols.participant;
+  const buildingCol = callState.dimCols.building;
+  const stageCol = callState.dimCols.stage;
+  const pointCol = callState.dimCols.point_id;
 
   const buildingLabel = (() => {
     const selected = state.filters.building;
@@ -1382,12 +1358,12 @@ async function exportCallsToKml() {
     return `${head}${arr.length > 3 ? ` +${arr.length - 3} more` : ''}`;
   })();
 
-  // Export a single combined KML. If Participant is present, group into toggleable folders.
-  const grouped = Boolean(participantCol);
+  // Export a single combined KML. If grouping columns exist, emit nested folders.
+  const grouped = Boolean(buildingCol || participantCol || stageCol || pointCol);
   const kml = buildCallKmlFromRows({
     rows,
     docName: grouped
-      ? `Call Vectors (by Participant) — ${buildingLabel} (${rows.length.toLocaleString()})`
+      ? `Call Vectors (by Building/Participant/Stage/Point) — ${buildingLabel} (${rows.length.toLocaleString()})`
       : `Call Vectors — ${buildingLabel} (${rows.length.toLocaleString()})`,
     groupByParticipant: grouped,
   });
