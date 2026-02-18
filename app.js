@@ -1484,11 +1484,7 @@ async function exportCallsToKml() {
 
       let testType = testTypeCol ? normalizeTestType(row?.[testTypeCol]) : '';
 
-      const shouldInferByStage = !profile.hasAnyExplicitTestType && !profile.hasExplicitRetest && profile.hasOemStage && profile.hasNonOemStage;
-      if (shouldInferByStage) {
-        if (stageVal === 'oem') testType = 'Retest';
-      }
-
+      // Only split by explicit test type values - no inference from stages
       if (!buildingGroups[building]) buildingGroups[building] = {};
       const typeKey = testType || 'All';
       if (!buildingGroups[building][typeKey]) buildingGroups[building][typeKey] = [];
