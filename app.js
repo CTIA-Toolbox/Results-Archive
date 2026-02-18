@@ -1355,36 +1355,57 @@ async function exportCallsToKml() {
   }
 
   const rows = callState.filteredRecords;
+  const buildingCol = callState.dimCols.building;
+  const testTypeCol = callState.dimCols.test_type;
   const participantCol = callState.dimCols.participant;
   const stageCol = callState.dimCols.stage;
   const locationSourceCol = callState.dimCols.location_source;
 
-  const buildingLabel = (() => {
-    const selected = state.filters.building;
-    if (!selected || selected.size === 0) return 'All Buildings';
-    const arr = Array.from(selected);
-    if (arr.length === 1) return arr[0];
-    const head = arr.slice(0, 3).join(', ');
-    return `${head}${arr.length > 3 ? ` +${arr.length - 3} more` : ''}`;
-  })();
+  // Group records by building, then by test type
+  const buildingGroups = {};
+  if (buildingCol) {
+    for (const row of rows) {
+      const building = String(row?.[buildingCol] ?? 'Building').trim() || 'Building';
+      const testType = testTypeCol ? String(row?.[testTypeCol] ?? '').trim() : null;
+      
+      if (!buildingGroups[building]) buildingGroups[building] = {};
+      const typeKey = testType || 'All';
+      if (!buildingGroups[building][typeKey]) buildingGroups[building][typeKey] = [];
+      buildingGroups[building][typeKey].push(row);
+    }
+  } else {
+    buildingGroups['Building'] = { 'All': rows };
+  }
 
-  // Export a single combined KML. If grouping columns exist, emit nested folders.
-  const grouped = Boolean(participantCol || stageCol || locationSourceCol);
-  const kml = buildCallKmlFromRows({
-    rows,
-    docName: grouped
-      ? `Call Vectors (by Stage/Participant/Location Technology) — ${buildingLabel} (${rows.length.toLocaleString()})`
-      : `Call Vectors — ${buildingLabel} (${rows.length.toLocaleString()})`,
-    groupByParticipant: grouped,
-  });
-  if (!kml) return;
+  // Export a KML for each building + test type combination
   const dt = new Date();
-  const buildingPart = state.filters.building && state.filters.building.size
-    ? `_${safeFilePart(Array.from(state.filters.building).slice(0, 3).join('-'))}${state.filters.building.size > 3 ? '_and_more' : ''}`
-    : '';
-  const filename = `Call_Vectors_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}${buildingPart}.kml`;
-  downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
-  setStatus(`Exported KML: ${filename}`);
+  const fileNames = [];
+  for (const building of Object.keys(buildingGroups).sort()) {
+    const typeGroups = buildingGroups[building];
+    for (const testType of Object.keys(typeGroups).sort()) {
+      const buildingRows = typeGroups[testType];
+      const grouped = Boolean(participantCol || stageCol || locationSourceCol);
+      const docLabel = testType !== 'All' ? ` — ${testType}` : '';
+      const kml = buildCallKmlFromRows({
+        rows: buildingRows,
+        docName: grouped
+          ? `Call Vectors (by Stage/Participant/Location Technology) — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`
+          : `Call Vectors — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`,
+        groupByParticipant: grouped,
+      });
+      if (!kml) continue;
+      const typeFilePart = testType !== 'All' ? `_${safeFilePart(testType)}` : '';
+      const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
+      downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+      fileNames.push(filename);
+    }
+  }
+
+  if (fileNames.length > 0) {
+    setStatus(`Exported ${fileNames.length} KML file${fileNames.length > 1 ? 's' : ''}: ${fileNames.join(', ')}`);
+  } else {
+    setStatus('No KML data to export', { error: true });
+  }
 }
 
 function exportCurrentPivotToExcel() {
@@ -2225,8 +2246,8 @@ function applyFilters() {
 
   // Exclude 'stage' from row filtering; it's used for column selection in the pivot.
   const active = getActiveFilters(['stage']);
-  // For call data, include stage so correlation mirrors results viewer filters.
-  const callActive = getActiveFilters([]);
+  // For call data, also exclude stage; OEM records are not tied to a specific stage and should always be visible.
+  const callActive = getActiveFilters(['stage']);
   console.log('[DEBUG applyFilters] Active filters (excluding stage):', active.map(([k, set]) => `${k}=${Array.from(set).join(',')}`));
   console.log('[DEBUG applyFilters] state.records count:', state.records.length);
   
