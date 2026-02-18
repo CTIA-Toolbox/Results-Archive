@@ -1448,6 +1448,7 @@ async function exportCallsToKml() {
         buildingProfiles[building] = {
           hasExplicitOriginal: false,
           hasExplicitRetest: false,
+          hasAnyExplicitTestType: false,
           hasOemStage: false,
           hasNonOemStage: false,
         };
@@ -1461,6 +1462,7 @@ async function exportCallsToKml() {
       const profile = getBuildingProfile(building);
 
       const testType = testTypeCol ? normalizeTestType(row?.[testTypeCol]) : '';
+      if (testType) profile.hasAnyExplicitTestType = true;
       if (testType === 'Original') profile.hasExplicitOriginal = true;
       if (testType === 'Retest') profile.hasExplicitRetest = true;
 
@@ -1483,7 +1485,7 @@ async function exportCallsToKml() {
 
       let testType = testTypeCol ? normalizeTestType(row?.[testTypeCol]) : '';
 
-      const shouldInferByStage = !profile.hasExplicitRetest && profile.hasOemStage && profile.hasNonOemStage;
+      const shouldInferByStage = !profile.hasAnyExplicitTestType && !profile.hasExplicitRetest && profile.hasOemStage && profile.hasNonOemStage;
       if (shouldInferByStage) {
         if (stageVal === 'oem') testType = 'Retest';
         else if (stageVal) testType = 'Original';
