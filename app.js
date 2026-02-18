@@ -1438,35 +1438,64 @@ async function exportCallsToKml() {
     // ignore debug logging errors
   }
 
-  // Group records by building only - one KML per building
+  // Group records - split by test type only if building has explicit test type values
   const buildingGroups = {};
+  const buildingsWithTestType = new Set();
+  
   if (buildingCol) {
+    // Pass 1: identify which buildings have explicit test type values
     for (const row of rows) {
       const building = String(row?.[buildingCol] ?? 'Building').trim() || 'Building';
-      if (!buildingGroups[building]) buildingGroups[building] = [];
-      buildingGroups[building].push(row);
+      if (testTypeCol) {
+        const testTypeVal = normalizeTestType(row?.[testTypeCol]);
+        if (testTypeVal) {
+          buildingsWithTestType.add(building);
+        }
+      }
+    }
+    
+    // Pass 2: group by building + test type (if applicable)
+    for (const row of rows) {
+      const building = String(row?.[buildingCol] ?? 'Building').trim() || 'Building';
+      if (!buildingGroups[building]) buildingGroups[building] = {};
+      
+      let testType = '';
+      if (buildingsWithTestType.has(building) && testTypeCol) {
+        testType = normalizeTestType(row?.[testTypeCol]) || '';
+      }
+      const groupKey = testType || 'All';
+      
+      if (!buildingGroups[building][groupKey]) buildingGroups[building][groupKey] = [];
+      buildingGroups[building][groupKey].push(row);
     }
   } else {
-    buildingGroups['Building'] = rows;
+    buildingGroups['Building'] = { 'All': rows };
   }
 
-  // Export a KML for each building
+  // Export a KML for each building + test type combination
   const dt = new Date();
   const fileNames = [];
   for (const building of Object.keys(buildingGroups).sort()) {
-    const buildingRows = buildingGroups[building];
-    const grouped = Boolean(participantCol || stageCol || locationSourceCol);
-    const kml = buildCallKmlFromRows({
-      rows: buildingRows,
-      docName: grouped
-        ? `Call Vectors (by Stage/Participant/Location Technology) — ${building} (${buildingRows.length.toLocaleString()})`
-        : `Call Vectors — ${building} (${buildingRows.length.toLocaleString()})`,
-      groupByParticipant: grouped,
-    });
-    if (!kml) continue;
-    const filename = `Call_Vectors_${safeFilePart(building)}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
-    downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
-    fileNames.push(filename);
+    const typeGroups = buildingGroups[building];
+    for (const testType of Object.keys(typeGroups).sort()) {
+      const buildingRows = typeGroups[testType];
+      const grouped = Boolean(participantCol || stageCol || locationSourceCol);
+      const testTypeLower = String(testType ?? '').toLowerCase();
+      const isRetestGroup = testTypeLower === 'retest';
+      const docLabel = isRetestGroup ? ' — Retest' : '';
+      const kml = buildCallKmlFromRows({
+        rows: buildingRows,
+        docName: grouped
+          ? `Call Vectors (by Stage/Participant/Location Technology) — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`
+          : `Call Vectors — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`,
+        groupByParticipant: grouped,
+      });
+      if (!kml) continue;
+      const typeFilePart = isRetestGroup ? '_Retest' : '';
+      const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
+      downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+      fileNames.push(filename);
+    }
   }
 
   if (fileNames.length > 0) {
