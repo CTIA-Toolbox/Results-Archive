@@ -1506,7 +1506,9 @@ async function exportCallsToKml() {
     for (const testType of Object.keys(typeGroups).sort()) {
       const buildingRows = typeGroups[testType];
       const grouped = Boolean(participantCol || stageCol || locationSourceCol);
-      const docLabel = testType !== 'All' ? ` — ${testType}` : '';
+      const testTypeLower = String(testType ?? '').toLowerCase();
+      const isRetestGroup = testTypeLower === 'retest';
+      const docLabel = isRetestGroup ? ' — Retest' : '';
       const kml = buildCallKmlFromRows({
         rows: buildingRows,
         docName: grouped
@@ -1515,7 +1517,7 @@ async function exportCallsToKml() {
         groupByParticipant: grouped,
       });
       if (!kml) continue;
-      const typeFilePart = testType !== 'All' ? `_${safeFilePart(testType)}` : '';
+      const typeFilePart = isRetestGroup ? '_Retest' : '';
       const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
       downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
       fileNames.push(filename);
@@ -1622,9 +1624,9 @@ function exportCurrentPivotToExcel() {
     if (base.toLowerCase() !== 'results') return sectionValue;
     const tt = testTypeByRowId.get(rowId);
     if (!tt || tt.size === 0) return sectionValue;
-    const labels = Array.from(tt);
-    if (labels.length === 1) return `${base} - ${labels[0]}`;
-    return `${base} - ${labels.join('/')}`;
+    const labelsLower = new Set(Array.from(tt, (v) => String(v ?? '').trim().toLowerCase()).filter(Boolean));
+    if (labelsLower.has('retest')) return `${base} - Retest`;
+    return base;
   };
 
   const makeSheetName = (() => {
@@ -1725,7 +1727,7 @@ function exportCurrentPivotToExcel() {
   }
   for (const building of Object.keys(buildingGroups)) {
     let aoaBuilding = [];
-    const SECTION_ORDER = ['Results', 'Results - Original', 'Results - Retest', 'Results - Original/Retest', 'Location Technology', 'Handet', 'Handset', 'Point ID', 'Point', 'Path ID', 'Path'];
+    const SECTION_ORDER = ['Results', 'Results - Retest', 'Location Technology', 'Handet', 'Handset', 'Point ID', 'Point', 'Path ID', 'Path'];
     const participantKey = getKeyForLabel('Participant');
     const sectionKey = getKeyForLabel('Section');
     const buildingRows = buildingGroups[building].map(rowId => {
