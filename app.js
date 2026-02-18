@@ -223,6 +223,7 @@ const state = {
     point_id: null,
     os: null,
     row_type: null,
+    test_type: null,
     id: null,
   },
 
@@ -1404,10 +1405,17 @@ function exportCurrentPivotToExcel() {
   }
 
   const leftCols = rowHeaderCols.map((c) => (typeof c === 'string' ? ({ key: c, label: c }) : c));
+  const leftLabelByKey = new Map(leftCols.map((c) => [c.key, String(c?.label ?? c?.key ?? '').toLowerCase()]));
+  const getKeyForLabel = (label) => {
+    const want = String(label ?? '').toLowerCase();
+    const col = leftCols.find((c) => String(c?.label ?? '').toLowerCase() === want);
+    return col?.key;
+  };
   const leftCount = leftCols.length;
   const stages = pivot.cols;
   const { metricKeys, metricLabels } = getMetricConfig();
   const metricCount = metricKeys.length;
+  const testTypeCol = state.dimCols.test_type;
 
   if (!metricCount) {
     setStatus('Could not find metric columns (Horizontal/Vertical 80%).', { error: true });
@@ -1453,6 +1461,49 @@ function exportCurrentPivotToExcel() {
     })
     : pivot.rows;
 
+  const rowKeysForId = leftCols.map((c) => c.key);
+  const getRowIdFromRecord = (rec) => rowKeysForId.map((k) => String(rec?.[k] ?? '').trim()).join('||');
+  const testTypeByRowId = new Map();
+  if (testTypeCol && rowKeysForId.length && Array.isArray(state.filteredRecords) && state.filteredRecords.length) {
+    for (const rec of state.filteredRecords) {
+      const rid = getRowIdFromRecord(rec);
+      if (!rid) continue;
+      const testTypeVal = String(rec?.[testTypeCol] ?? '').trim();
+      if (!testTypeVal) continue;
+      if (!testTypeByRowId.has(rid)) testTypeByRowId.set(rid, new Set());
+      testTypeByRowId.get(rid).add(testTypeVal);
+    }
+  }
+
+  const getSectionLabelForExport = (rowId, sectionValue) => {
+    const base = String(sectionValue ?? '');
+    if (base.toLowerCase() !== 'results') return sectionValue;
+    const tt = testTypeByRowId.get(rowId);
+    if (!tt || tt.size === 0) return sectionValue;
+    const labels = Array.from(tt);
+    if (labels.length === 1) return `${base} - ${labels[0]}`;
+    return `${base} - ${labels.join('/')}`;
+  };
+
+  const makeSheetName = (() => {
+    const used = new Set();
+    return (rawName) => {
+      let base = String(rawName ?? 'Building').trim();
+      if (!base) base = 'Building';
+      base = base.replace(/[\\/?*\[\]:]/g, '_');
+      if (!base) base = 'Building';
+      let candidate = base.slice(0, 31);
+      let i = 2;
+      while (used.has(candidate)) {
+        const suffix = ` (${i})`;
+        candidate = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`;
+        i++;
+      }
+      used.add(candidate);
+      return candidate;
+    };
+  })();
+
   // Track previous values for each left column to blank repeats
   const prevVals = new Array(leftCols.length).fill(undefined);
   for (const rowId of exportRowIds) {
@@ -1461,7 +1512,10 @@ function exportCurrentPivotToExcel() {
     // Fill left columns, blanking repeats
     for (let i = 0; i < leftCols.length; i++) {
       const key = leftCols[i].key;
-      const val = meta[key];
+      let val = meta[key];
+      if (key.toLowerCase() === 'section') {
+        val = getSectionLabelForExport(rowId, val);
+      }
       if (prevVals[i] === val) {
         row.push('');
       } else {
@@ -1519,19 +1573,24 @@ function exportCurrentPivotToExcel() {
 
   // Group rows by building and participant, insert summary row at top of each participant section
   const buildingGroups = {};
+  const buildingKey = getKeyForLabel('Building');
   for (const rowId of exportRowIds) {
     const meta = pivot.rowMeta?.get(rowId) ?? {};
-    const building = meta['Building'] || meta['building'] || meta[leftCols.find(c => c.key.toLowerCase() === 'building')?.key];
-    if (!buildingGroups[building]) buildingGroups[building] = [];
-    buildingGroups[building].push(rowId);
+    const building = (buildingKey ? meta[buildingKey] : undefined) ?? meta['Building'] ?? meta['building'] ?? 'Building';
+    const buildingGroupKey = String(building ?? '').trim() || 'Building';
+    if (!buildingGroups[buildingGroupKey]) buildingGroups[buildingGroupKey] = [];
+    buildingGroups[buildingGroupKey].push(rowId);
   }
   for (const building of Object.keys(buildingGroups)) {
     let aoaBuilding = [];
-    const SECTION_ORDER = ['Results', 'Location Technology', 'Handet', 'Handset', 'Point ID', 'Point', 'Path ID', 'Path'];
+    const SECTION_ORDER = ['Results', 'Results - Original', 'Results - Retest', 'Results - Original/Retest', 'Location Technology', 'Handet', 'Handset', 'Point ID', 'Point', 'Path ID', 'Path'];
+    const participantKey = getKeyForLabel('Participant');
+    const sectionKey = getKeyForLabel('Section');
     const buildingRows = buildingGroups[building].map(rowId => {
       const meta = pivot.rowMeta?.get(rowId) ?? {};
-      const participant = meta['Participant'] || meta['participant'] || meta[leftCols.find(c => c.key.toLowerCase() === 'participant')?.key];
-      const section = meta['Section'] || meta['section'] || meta[leftCols.find(c => c.key.toLowerCase() === 'section')?.key];
+      const participant = (participantKey ? meta[participantKey] : undefined) ?? meta['Participant'] ?? meta['participant'] ?? '';
+      const sectionRaw = (sectionKey ? meta[sectionKey] : undefined) ?? meta['Section'] ?? meta['section'] ?? '';
+      const section = getSectionLabelForExport(rowId, sectionRaw);
       return { rowId, participant, section, meta };
     });
     // Group rows by participant
@@ -1591,9 +1650,13 @@ function exportCurrentPivotToExcel() {
       const row = [];
       for (let i = 0; i < leftCols.length; i++) {
         const key = leftCols[i].key;
-        const val = meta[key];
+        const keyLabel = leftLabelByKey.get(key) || String(key ?? '').toLowerCase();
+        let val = meta[key];
+        if (keyLabel === 'section') {
+          val = getSectionLabelForExport(rowId, val);
+        }
         // Remove duplicates for Building only within the entire sheet, and Participant only within each group
-        if (key.toLowerCase() === 'building') {
+        if (keyLabel === 'building') {
           // Only show Building once at the top, then blank for subsequent rows
           if (prevVals[i] === undefined) {
             row.push(val);
@@ -1601,14 +1664,14 @@ function exportCurrentPivotToExcel() {
           } else {
             row.push('');
           }
-        } else if (key.toLowerCase() === 'participant') {
+        } else if (keyLabel === 'participant') {
           if (prevVals[i] === val) {
             row.push('');
           } else {
             row.push(val);
             prevVals[i] = val;
           }
-        } else if (key.toLowerCase() === 'os') {
+        } else if (keyLabel === 'os') {
           row.push(val); // always show OS, no suppression
         } else {
           row.push(val);
@@ -1760,8 +1823,7 @@ function exportCurrentPivotToExcel() {
         }
       }
     }
-    let sheetName = String(building || 'Building');
-    if (!sheetName.trim()) sheetName = 'Building';
+    const sheetName = makeSheetName(building);
     XLSX.utils.book_append_sheet(wb, wsBuilding, sheetName);
   }
   
@@ -1823,6 +1885,7 @@ function guessDimensionColumns(columns) {
     point_id: detectColumn(columns, ['point_id', 'point id', 'point', 'pointid']),
     os: detectColumn(columns, ['os', 'operating system', 'platform']),
     row_type: detectColumn(columns, ['row_type', 'row type', 'type', 'section']),
+    test_type: detectColumn(columns, ['test_type', 'test type', 'testtype', 'run type', 'original/retest']),
     id: detectColumn(columns, ['id', 'label', 'name']),
   };
 }
