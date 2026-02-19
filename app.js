@@ -3422,6 +3422,26 @@ if (els.buildingText) {
   els.buildingText.addEventListener('change', () => applyBuildingTextFilter());
 }
 
+// Import Databases button (multi-file selector)
+const importDbBtn = document.querySelector('#importDatabasesBtn');
+if (!importDbBtn) {
+  // Create button dynamically if it doesn't exist in HTML
+  const newBtn = document.createElement('button');
+  newBtn.id = 'importDatabasesBtn';
+  newBtn.type = 'button';
+  newBtn.className = 'btn';
+  newBtn.textContent = 'Import Databases';
+  newBtn.style.marginBottom = '12px';
+  // Insert near top of page (after status)
+  const statusEl = document.querySelector('#statusText');
+  if (statusEl && statusEl.parentNode) {
+    statusEl.parentNode.insertBefore(newBtn, statusEl.nextSibling);
+  } else {
+    document.body.insertBefore(newBtn, document.body.firstChild);
+  }
+  logDebug('Created Import Databases button dynamically.');
+}
+
 // Header building selection events
 if (els.buildingSelect) {
   const applyBuildingSelectFilter = () => {
@@ -3522,7 +3542,72 @@ function attachFileInputListeners() {
 }
 
 // Try to attach immediately, and also on DOMContentLoaded in case elements were not ready
+// --- Multi-file database import handler ---
+function initImportDatabasesButton() {
+  const importBtn = document.querySelector('#importDatabasesBtn');
+  if (!importBtn) {
+    logDebug('Import databases button not found in DOM; creating dynamically.');
+    return;
+  }
+
+  // Create hidden multi-file input
+  const multiInput = document.createElement('input');
+  multiInput.type = 'file';
+  multiInput.multiple = true;
+  multiInput.accept = '.xlsx';
+  multiInput.style.display = 'none';
+  multiInput.id = 'importDatabasesInput';
+  document.body.appendChild(multiInput);
+
+  importBtn.addEventListener('click', () => {
+    logDebug('[Import] User clicked Import Databases button');
+    multiInput.value = '';
+    multiInput.click();
+  });
+
+  multiInput.addEventListener('change', async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (!files.length) return;
+
+    setStatus(`Importing ${files.length} database file(s)…`);
+    logDebug(`[Import] Selected ${files.length} file(s)`);
+
+    let buildingLoaded = false;
+    let correlationLoaded = false;
+
+    for (const file of files) {
+      const nameLower = (file.name || '').toLowerCase();
+      logDebug(`[Import] Processing: ${file.name}`);
+
+      try {
+        if (nameLower.includes('building')) {
+          logDebug(`[Import] → Routing to Building Results loader`);
+          await onFileSelected(file);
+          buildingLoaded = true;
+        } else if (nameLower.includes('correlation')) {
+          logDebug(`[Import] → Routing to Correlation loader`);
+          await onCallFileSelected(file);
+          correlationLoaded = true;
+        } else {
+          logDebug(`[Import] ⚠ Unknown filename: ${file.name} (skipped)`);
+        }
+      } catch (err) {
+        console.error(`[Import] Error loading ${file.name}:`, err);
+        logDebug(`[Import] ✗ Error: ${err?.message ?? String(err)}`);
+      }
+    }
+
+    const summary = [];
+    if (buildingLoaded) summary.push('Building Results');
+    if (correlationLoaded) summary.push('Correlation');
+    const msg = summary.length ? `Imported: ${summary.join(' + ')}` : 'Import complete (no matching files).';
+    setStatus(msg);
+    logDebug(`[Import] Complete. ${msg}`);
+  });
+}
+
 console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+initImportDatabasesButton();
 attachFileInputListeners();
 window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
 
