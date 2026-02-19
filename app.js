@@ -1481,17 +1481,20 @@ async function exportCallsToKml() {
     buildingGroups['Building'] = { 'All': rows };
   }
 
-  // Export a KML for each building + test type combination
+  // Export a KML for each building + test type combination, but only create 'Retest' KML if there are actual Retest rows,
+  // and skip 'All' group if all rows are Retest.
   const dt = new Date();
   const fileNames = [];
   for (const building of Object.keys(buildingGroups).sort()) {
     const typeGroups = buildingGroups[building];
-    for (const testType of Object.keys(typeGroups).sort()) {
-      const buildingRows = typeGroups[testType];
+    const groupKeys = Object.keys(typeGroups);
+    const hasRetest = groupKeys.includes('Retest');
+    const hasAll = groupKeys.includes('All');
+    // If only Retest exists, skip 'All'
+    if (hasRetest && groupKeys.length === 1) {
+      const buildingRows = typeGroups['Retest'];
       const grouped = Boolean(participantCol || stageCol || locationSourceCol);
-      const testTypeLower = String(testType ?? '').toLowerCase();
-      const isRetestGroup = testTypeLower === 'retest';
-      const docLabel = isRetestGroup ? ' — Retest' : '';
+      const docLabel = ' — Retest';
       const kml = buildCallKmlFromRows({
         rows: buildingRows,
         docName: grouped
@@ -1500,10 +1503,31 @@ async function exportCallsToKml() {
         groupByParticipant: grouped,
       });
       if (!kml) continue;
-      const typeFilePart = isRetestGroup ? '_Retest' : '';
-      const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
+      const filename = `Call_Vectors_${safeFilePart(building)}_Retest_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
       downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
       fileNames.push(filename);
+    } else {
+      // Export all groups except 'All' if 'Retest' exists
+      for (const testType of groupKeys.sort()) {
+        if (hasRetest && testType === 'All') continue;
+        const buildingRows = typeGroups[testType];
+        const grouped = Boolean(participantCol || stageCol || locationSourceCol);
+        const testTypeLower = String(testType ?? '').toLowerCase();
+        const isRetestGroup = testTypeLower === 'retest';
+        const docLabel = isRetestGroup ? ' — Retest' : '';
+        const kml = buildCallKmlFromRows({
+          rows: buildingRows,
+          docName: grouped
+            ? `Call Vectors (by Stage/Participant/Location Technology) — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`
+            : `Call Vectors — ${building}${docLabel} (${buildingRows.length.toLocaleString()})`,
+          groupByParticipant: grouped,
+        });
+        if (!kml) continue;
+        const typeFilePart = isRetestGroup ? '_Retest' : '';
+        const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
+        downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+        fileNames.push(filename);
+      }
     }
   }
 
