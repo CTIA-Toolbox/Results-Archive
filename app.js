@@ -1371,8 +1371,19 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     pieces.push('</Folder>');
   };
 
-  // Root-level placemarks (only when no grouping columns exist).
-  pieces.push(...root.items);
+
+  // If there are root-level placemarks and no grouping columns, wrap them in a Folder for Google Earth dropdown
+  const hasGrouping = stageCol || participantCol || locationSourceCol;
+  if (root.items.length && !hasGrouping) {
+    pieces.push('<Folder>');
+    pieces.push(`<name>${xmlEscape(docName || 'Call Vectors')}</name>`);
+    pieces.push('<open>1</open>');
+    pieces.push(...root.items);
+    pieces.push('</Folder>');
+  } else {
+    // Root-level placemarks (only when no grouping columns exist).
+    pieces.push(...root.items);
+  }
 
   const topNames = Array.from(root.children.keys()).sort((a, b) => a.localeCompare(b));
   for (const n of topNames) {
